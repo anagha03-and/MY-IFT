@@ -1,0 +1,1282 @@
+/* =========================
+   GLOBAL
+========================= */
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #f4f7fb;
+  color: #1f2937;
+}
+
+
+/* =========================
+   LOGIN PAGE
+========================= */
+
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background: #f4f7fb;
+}
+
+.login-card {
+  width: 420px;
+  padding: 40px;
+  background: white;
+  border-radius: 18px;
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.08);
+  text-align: center;
+}
+
+.logo-circle {
+  width: 65px;
+  height: 65px;
+  margin: 0 auto 20px;
+  border-radius: 50%;
+  background: #e8f1ff;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+
+  font-size: 30px;
+}
+
+.login-card h1 {
+  margin: 0;
+  font-size: 32px;
+  color: #1f2937;
+}
+
+.subtitle {
+  margin: 8px 0 30px;
+  color: #64748b;
+  font-size: 15px;
+}
+
+.login-card form {
+  text-align: left;
+}
+
+.login-card label {
+  display: block;
+  margin: 16px 0 7px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.login-card input {
+  width: 100%;
+  height: 44px;
+  padding: 0 12px;
+
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+
+  font-size: 15px;
+  outline: none;
+}
+
+.login-card input:focus {
+  border-color: #2563eb;
+}
+
+.login-card button {
+  width: 100%;
+  height: 44px;
+
+  margin-top: 24px;
+
+  border: none;
+  border-radius: 8px;
+
+  background: #2563eb;
+  color: white;
+
+  font-size: 15px;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.login-card button:hover {
+  background: #1d4ed8;
+}
+
+.login-note {
+  margin-top: 25px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+
+/* =========================
+   DASHBOARD
+========================= */
+
+.dashboard {
+  min-height: 100vh;
+  background: #f4f7fb;
+}
+
+
+/* =========================
+   HEADER
+========================= */
+
+.dashboard-header {
+  height: 82px;
+
+  padding: 0 50px;
+
+  background: white;
+
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  border-bottom: 1px solid #e5e7eb;
+
+  position: relative;
+}
+
+.dashboard-header h1 {
+  margin: 0;
+  font-size: 25px;
+}
+
+.dashboard-header p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.profile-button {
+  padding: 10px 16px;
+
+  border: 1px solid #dbe3ef;
+  border-radius: 8px;
+
+  background: white;
+  color: #374151;
+
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.profile-button:hover {
+  background: #f8fafc;
+}
+
+.logout-button {
+  padding: 10px 20px;
+
+  border: none;
+  border-radius: 8px;
+
+  background: #ef4444;
+  color: white;
+
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.logout-button:hover {
+  background: #dc2626;
+}
+
+
+/* =========================
+   PROFILE POPUP
+========================= */
+
+.profile-popup {
+  position: fixed;
+
+  top: 92px;
+  right: 35px;
+
+  width: 320px;
+
+  padding: 24px;
+
+  background: white;
+
+  border-radius: 14px;
+
+  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.18);
+
+  border: 1px solid #e5e7eb;
+
+  z-index: 1000;
+}
+
+.profile-popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+
+  margin-bottom: 18px;
+}
+
+.profile-popup-header h2 {
+  margin: 0;
+}
+
+.profile-popup-header p {
+  margin: 5px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.profile-close {
+  border: none;
+
+  background: transparent;
+
+  font-size: 24px;
+
+  cursor: pointer;
+
+  color: #64748b;
+}
+
+.profile-avatar {
+  width: 65px;
+  height: 65px;
+
+  margin: 5px auto 10px;
+
+  border-radius: 50%;
+
+  background: #e8f1ff;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 28px;
+}
+
+.profile-username {
+  text-align: center;
+
+  margin: 5px 0;
+}
+
+.profile-role {
+  text-align: center;
+
+  color: #64748b;
+
+  font-size: 13px;
+
+  margin-bottom: 20px;
+}
+
+.profile-stat {
+  padding: 15px;
+
+  background: #f8fafc;
+
+  border-radius: 10px;
+
+  margin-bottom: 10px;
+
+  text-align: center;
+}
+
+.profile-stat strong {
+  display: block;
+
+  font-size: 25px;
+
+  margin-bottom: 5px;
+}
+
+.profile-stat span {
+  color: #64748b;
+
+  font-size: 13px;
+}
+
+
+/* =========================
+   WELCOME
+========================= */
+
+.welcome-section {
+  padding: 35px 50px 20px;
+}
+
+.welcome-section h2 {
+  margin: 15px 0 8px;
+  font-size: 28px;
+}
+
+.welcome-section p {
+  margin: 0;
+  color: #64748b;
+}
+
+
+/* =========================
+   DASHBOARD CARDS
+========================= */
+
+.dashboard-grid {
+  padding: 20px 50px;
+
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+
+  gap: 22px;
+}
+
+.dashboard-card {
+  padding: 25px;
+
+  background: white;
+
+  border-radius: 14px;
+
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+}
+
+.dashboard-card h3 {
+  margin: 15px 0 8px;
+}
+
+.dashboard-card p {
+  min-height: 48px;
+
+  color: #64748b;
+
+  line-height: 1.5;
+}
+
+.card-icon {
+  font-size: 32px;
+}
+
+.dashboard-card button {
+  margin-top: 15px;
+
+  padding: 10px 16px;
+
+  border: none;
+  border-radius: 8px;
+
+  background: #2563eb;
+  color: white;
+
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.dashboard-card button:hover {
+  background: #1d4ed8;
+}
+
+
+/* =========================
+   SYSTEM OVERVIEW
+========================= */
+
+.quick-info {
+  margin: 20px 50px 50px;
+
+  padding: 25px;
+
+  background: white;
+
+  border-radius: 14px;
+
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+}
+
+.quick-info h2 {
+  margin-top: 0;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+
+  gap: 20px;
+}
+
+.info-grid div {
+  padding: 20px;
+
+  background: #f8fafc;
+
+  border-radius: 10px;
+
+  text-align: center;
+}
+
+.info-grid strong {
+  display: block;
+
+  margin-bottom: 8px;
+
+  font-size: 28px;
+}
+
+.info-grid span {
+  color: #64748b;
+}
+
+
+/* =========================
+   BUTTONS
+========================= */
+
+.back-button {
+  padding: 0;
+
+  border: none;
+
+  background: transparent;
+
+  color: #2563eb;
+
+  font-size: 15px;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.back-button:hover {
+  color: #1d4ed8;
+}
+
+.primary-button {
+  padding: 11px 18px;
+
+  border: none;
+  border-radius: 8px;
+
+  background: #2563eb;
+  color: white;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.primary-button:hover {
+  background: #1d4ed8;
+}
+
+.secondary-button {
+  padding: 11px 18px;
+
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+
+  background: white;
+  color: #374151;
+
+  font-size: 14px;
+  font-weight: 600;
+
+  cursor: pointer;
+}
+
+.secondary-button:hover {
+  background: #f8fafc;
+}
+
+
+/* =========================
+   PATIENTS
+========================= */
+
+.patients-section {
+  margin: 20px 50px 50px;
+
+  padding: 30px;
+
+  background: white;
+
+  border-radius: 14px;
+
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+}
+
+.section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  margin-bottom: 25px;
+}
+
+.section-header h2 {
+  margin: 0 0 5px;
+}
+
+.section-header p {
+  margin: 0;
+
+  color: #64748b;
+  font-size: 14px;
+}
+
+.empty-state {
+  padding: 60px 20px;
+
+  border: 2px dashed #dbe3ef;
+  border-radius: 12px;
+
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 45px;
+  margin-bottom: 10px;
+}
+
+.empty-state h3 {
+  margin: 10px 0;
+}
+
+.empty-state p {
+  margin-bottom: 20px;
+
+  color: #64748b;
+}
+
+
+/* =========================
+   PATIENT CARDS
+========================= */
+
+.patient-list {
+  display: flex;
+  flex-direction: column;
+
+  gap: 15px;
+}
+
+.patient-card {
+  display: flex;
+
+  gap: 18px;
+
+  padding: 20px;
+
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+
+  transition: 0.2s;
+}
+
+.patient-card:hover {
+  border-color: #93c5fd;
+
+  box-shadow:
+    0 4px 15px rgba(37, 99, 235, 0.08);
+}
+
+.patient-avatar {
+  width: 55px;
+  height: 55px;
+
+  flex-shrink: 0;
+
+  border-radius: 50%;
+
+  background: #e8f1ff;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 25px;
+}
+
+.patient-details {
+  flex: 1;
+}
+
+.patient-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.patient-title h3 {
+  margin: 0;
+}
+
+.patient-id {
+  color: #2563eb;
+
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.patient-info {
+  display: flex;
+
+  gap: 25px;
+
+  margin: 8px 0;
+
+  color: #64748b;
+
+  font-size: 14px;
+}
+
+.patient-details p {
+  margin: 6px 0;
+
+  font-size: 14px;
+}
+
+
+/* =========================
+   FORM
+========================= */
+
+.form-section {
+  margin: 20px 50px 50px;
+
+  padding: 30px;
+
+  background: white;
+
+  border-radius: 14px;
+
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.05);
+}
+
+.form-title {
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  padding-bottom: 20px;
+
+  margin-bottom: 25px;
+
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.form-title h2 {
+  margin: 0 0 5px;
+}
+
+.form-title p {
+  margin: 0;
+
+  color: #64748b;
+
+  font-size: 14px;
+}
+
+.form-icon {
+  width: 55px;
+  height: 55px;
+
+  border-radius: 12px;
+
+  background: #e8f1ff;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  font-size: 26px;
+}
+
+
+/* =========================
+   FORM GRID
+========================= */
+
+.patient-form {
+  display: grid;
+
+  grid-template-columns: repeat(3, 1fr);
+
+  gap: 22px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  margin-bottom: 8px;
+
+  font-size: 14px;
+
+  font-weight: 600;
+}
+
+.form-group input,
+.form-group select,
+.form-group textarea {
+  width: 100%;
+
+  padding: 12px;
+
+  border: 1px solid #d1d5db;
+
+  border-radius: 8px;
+
+  font-family: inherit;
+  font-size: 14px;
+
+  outline: none;
+}
+
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus {
+  border-color: #2563eb;
+}
+
+.form-group textarea {
+  resize: vertical;
+}
+
+.full-width {
+  grid-column: 1 / -1;
+}
+
+.form-actions {
+  grid-column: 1 / -1;
+
+  display: flex;
+
+  justify-content: flex-end;
+
+  gap: 12px;
+
+  margin-top: 5px;
+}
+
+
+/* =========================
+   AI RESULT
+========================= */
+
+.ai-result {
+  margin-top: 20px;
+
+  padding: 20px;
+
+  background: #f0f7ff;
+
+  border: 1px solid #dbeafe;
+
+  border-radius: 12px;
+}
+
+.ai-result h3 {
+  margin-top: 0;
+}
+
+.ai-result p {
+  margin: 8px 0;
+}
+
+.ai-message {
+  color: #64748b;
+
+  font-size: 13px;
+
+  line-height: 1.5;
+}
+
+
+/* =========================
+   SESSION CONTROL
+========================= */
+
+.session-control {
+  text-align: center;
+}
+
+.session-control h2 {
+  margin-top: 0;
+}
+
+.session-timer {
+  font-size: 42px;
+
+  font-weight: bold;
+
+  margin: 20px 0;
+}
+
+.session-running-text {
+  color: #16a34a;
+
+  font-weight: 600;
+}
+
+.session-paused-text {
+  color: #ca8a04;
+
+  font-weight: 600;
+}
+
+.session-completed-text {
+  color: #2563eb;
+
+  font-weight: 600;
+}
+
+.session-buttons {
+  display: flex;
+
+  justify-content: center;
+
+  gap: 12px;
+
+  flex-wrap: wrap;
+
+  margin-top: 20px;
+}
+
+.after-pain-box {
+  max-width: 400px;
+
+  margin: 30px auto 0;
+
+  text-align: left;
+}
+
+.after-pain-box label {
+  display: block;
+
+  margin-bottom: 8px;
+
+  font-weight: 600;
+}
+
+.after-pain-box input {
+  width: 100%;
+
+  padding: 12px;
+
+  border: 1px solid #d1d5db;
+
+  border-radius: 8px;
+
+  font-size: 15px;
+
+  margin-bottom: 15px;
+}
+
+.after-pain-box button {
+  width: 100%;
+}
+
+
+/* =========================
+   SAFETY WARNING POPUP
+========================= */
+
+.warning-overlay {
+  position: fixed;
+
+  top: 0;
+  left: 0;
+
+  width: 100%;
+  height: 100vh;
+
+  background: rgba(15, 23, 42, 0.65);
+
+  display: flex;
+
+  justify-content: center;
+  align-items: center;
+
+  padding: 20px;
+
+  z-index: 9999;
+}
+
+.warning-popup {
+  width: 100%;
+
+  max-width: 680px;
+
+  max-height: 90vh;
+
+  background: white;
+
+  border-radius: 16px;
+
+  box-shadow:
+    0 20px 60px rgba(0, 0, 0, 0.25);
+
+  overflow: hidden;
+
+  animation: warningPopupIn 0.2s ease-out;
+}
+
+@keyframes warningPopupIn {
+
+  from {
+    opacity: 0;
+
+    transform: scale(0.95);
+  }
+
+  to {
+    opacity: 1;
+
+    transform: scale(1);
+  }
+
+}
+
+
+/* =========================
+   WARNING HEADER
+========================= */
+
+.warning-header {
+  display: flex;
+
+  align-items: center;
+
+  gap: 15px;
+
+  padding: 22px 25px;
+
+  border-bottom: 1px solid #e5e7eb;
+
+  background: white;
+}
+
+.warning-icon {
+  width: 48px;
+  height: 48px;
+
+  flex-shrink: 0;
+
+  border-radius: 50%;
+
+  background: #fff7ed;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+
+  font-size: 25px;
+}
+
+.warning-header h2 {
+  margin: 0;
+
+  font-size: 22px;
+
+  color: #1f2937;
+}
+
+.warning-header p {
+  margin: 4px 0 0;
+
+  color: #64748b;
+
+  font-size: 14px;
+}
+
+.warning-close {
+  margin-left: auto;
+
+  width: 35px;
+  height: 35px;
+
+  border: none;
+
+  border-radius: 50%;
+
+  background: #f1f5f9;
+
+  color: #475569;
+
+  font-size: 24px;
+
+  cursor: pointer;
+
+  display: flex;
+
+  align-items: center;
+
+  justify-content: center;
+}
+
+.warning-close:hover {
+  background: #e2e8f0;
+}
+
+
+/* =========================
+   WARNING CONTENT
+========================= */
+
+.warning-content {
+  padding: 25px;
+
+  max-height: 60vh;
+
+  overflow-y: auto;
+}
+
+.warning-intro {
+  margin-top: 0;
+
+  color: #475569;
+
+  line-height: 1.5;
+}
+
+.warning-content ul {
+  margin: 18px 0;
+
+  padding-left: 25px;
+
+  color: #374151;
+}
+
+.warning-content li {
+  margin-bottom: 10px;
+
+  line-height: 1.5;
+}
+
+
+/* =========================
+   DANGER MESSAGE
+========================= */
+
+.warning-danger {
+  padding: 16px;
+
+  margin-top: 20px;
+
+  border-radius: 10px;
+
+  background: #fef2f2;
+
+  border: 1px solid #fecaca;
+
+  color: #991b1b;
+
+  line-height: 1.5;
+}
+
+
+/* =========================
+   IMPORTANT NOTE
+========================= */
+
+.warning-note {
+  margin-top: 18px;
+
+  padding: 16px;
+
+  border-radius: 10px;
+
+  background: #f8fafc;
+
+  border: 1px solid #e2e8f0;
+
+  color: #475569;
+
+  font-size: 13px;
+
+  line-height: 1.6;
+}
+
+.warning-note strong {
+  color: #1f2937;
+}
+
+.warning-note p {
+  margin: 7px 0 0;
+}
+
+
+/* =========================
+   WARNING ACTIONS
+========================= */
+
+.warning-actions {
+  display: flex;
+
+  justify-content: flex-end;
+
+  gap: 12px;
+
+  padding: 18px 25px;
+
+  border-top: 1px solid #e5e7eb;
+
+  background: #fafafa;
+}
+
+
+/* =========================
+   RESPONSIVE
+========================= */
+
+@media (max-width: 1100px) {
+
+  .dashboard-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .info-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .patient-form {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+}
+
+@media (max-width: 650px) {
+
+  .dashboard-header {
+    padding: 0 20px;
+
+    height: auto;
+
+    min-height: 82px;
+
+    gap: 10px;
+  }
+
+  .header-actions {
+    flex-wrap: wrap;
+
+    justify-content: flex-end;
+  }
+
+  .profile-button {
+    padding: 9px 12px;
+  }
+
+  .logout-button {
+    padding: 9px 12px;
+  }
+
+  .welcome-section {
+    padding: 25px 20px;
+  }
+
+  .dashboard-grid {
+    padding: 20px;
+
+    grid-template-columns: 1fr;
+  }
+
+  .quick-info {
+    margin: 20px;
+  }
+
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .patients-section,
+  .form-section {
+    margin: 20px;
+
+    padding: 20px;
+  }
+
+  .patient-form {
+    grid-template-columns: 1fr;
+  }
+
+  .full-width {
+    grid-column: auto;
+  }
+
+  .section-header {
+    align-items: flex-start;
+
+    flex-direction: column;
+
+    gap: 15px;
+  }
+
+  .patient-info {
+    flex-direction: column;
+
+    gap: 5px;
+  }
+
+  .profile-popup {
+    top: 90px;
+
+    right: 15px;
+
+    left: 15px;
+
+    width: auto;
+  }
+
+  .warning-overlay {
+    padding: 12px;
+  }
+
+  .warning-popup {
+    max-height: 94vh;
+  }
+
+  .warning-header {
+    padding: 18px;
+  }
+
+  .warning-content {
+    padding: 18px;
+  }
+
+  .warning-actions {
+    padding: 15px;
+
+    flex-direction: column;
+  }
+
+  .warning-actions button {
+    width: 100%;
+  }
+
+}
