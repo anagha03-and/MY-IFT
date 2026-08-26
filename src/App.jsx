@@ -34,6 +34,8 @@ function App() {
 
   const [page, setPage] = useState("dashboard");
 
+  const [showUserMenu, setShowUserMenu] = useState(false);
+
   /* =====================================================
      USERS DATA
   ===================================================== */
@@ -267,7 +269,6 @@ function App() {
     setSessionSeconds(0);
     setAfterPainScore("");
     setShowAfterTreatmentPopup(false);
-    setShowSafetyWarning(false);
 
     setPage("treatment");
   };
@@ -498,22 +499,6 @@ function App() {
       newSession,
     ];
 
-    /*
-      IMPORTANT:
-      The patient's pain score is updated to the
-      after-treatment score.
-
-      Therefore, when the next session starts:
-
-      Session 1 After = 6
-      ↓
-      Session 2 Before = 6
-      ↓
-      Session 2 After = 4
-      ↓
-      Session 3 Before = 4
-    */
-
     const updatedPatients = patients.map(
       (patient) => {
         if (patient.id !== selectedPatient.id) {
@@ -556,6 +541,7 @@ function App() {
     setUsername("");
     setSelectedPatient(null);
     setPage("dashboard");
+    setShowUserMenu(false);
 
     localStorage.removeItem("smartIFT_loggedIn");
     localStorage.removeItem("smartIFT_username");
@@ -568,14 +554,13 @@ function App() {
   if (!loggedIn) {
     return (
       <div className="login-page">
-
         <div className="login-card">
 
           <div className="logo-circle">
             ⚡
           </div>
 
-          <h1>Smart IFT</h1>
+          <h1>MY IFT</h1>
 
           <p className="subtitle">
             Intelligent Interferential Therapy
@@ -646,13 +631,12 @@ function App() {
           </p>
 
         </div>
-
       </div>
     );
   }
 
   /* =====================================================
-     PROFILE PAGE
+     PROFILE
   ===================================================== */
 
   if (page === "profile") {
@@ -662,16 +646,70 @@ function App() {
         <header className="dashboard-header">
 
           <div>
-            <h1>Smart IFT</h1>
+            <h1>MY IFT</h1>
             <p>User Profile</p>
           </div>
 
-          <button
-            className="logout-button"
-            onClick={logout}
+          <div
+            style={{
+              position: "relative",
+            }}
           >
-            Logout
-          </button>
+            <button
+              className="secondary-button"
+              onClick={() =>
+                setShowUserMenu(
+                  (previous) => !previous
+                )
+              }
+            >
+              👤 {username} ▾
+            </button>
+
+            {showUserMenu && (
+              <div
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  top: "calc(100% + 8px)",
+                  background: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "10px",
+                  padding: "8px",
+                  minWidth: "180px",
+                  boxShadow:
+                    "0 10px 30px rgba(0,0,0,0.15)",
+                  zIndex: 1000,
+                }}
+              >
+
+                <button
+                  className="secondary-button"
+                  style={{
+                    width: "100%",
+                    marginBottom: "6px",
+                  }}
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    setPage("profile");
+                  }}
+                >
+                  👤 Profile
+                </button>
+
+                <button
+                  className="logout-button"
+                  style={{
+                    width: "100%",
+                  }}
+                  onClick={logout}
+                >
+                  🚪 Logout
+                </button>
+
+              </div>
+            )}
+          </div>
 
         </header>
 
@@ -689,7 +727,7 @@ function App() {
           <h2>User Profile</h2>
 
           <p>
-            Your Smart IFT account.
+            Your MY IFT account.
           </p>
 
         </section>
@@ -745,16 +783,72 @@ function App() {
         <header className="dashboard-header">
 
           <div>
-            <h1>Smart IFT</h1>
+            <h1>MY IFT</h1>
             <p>Treatment Session</p>
           </div>
 
-          <button
-            className="logout-button"
-            onClick={logout}
+          <div
+            style={{
+              position: "relative",
+            }}
           >
-            Logout
-          </button>
+
+            <button
+              className="secondary-button"
+              onClick={() =>
+                setShowUserMenu(
+                  (previous) => !previous
+                )
+              }
+            >
+              👤 {username} ▾
+            </button>
+
+            {showUserMenu && (
+              <div
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  top: "calc(100% + 8px)",
+                  background: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "10px",
+                  padding: "8px",
+                  minWidth: "180px",
+                  boxShadow:
+                    "0 10px 30px rgba(0,0,0,0.15)",
+                  zIndex: 1000,
+                }}
+              >
+
+                <button
+                  className="secondary-button"
+                  style={{
+                    width: "100%",
+                    marginBottom: "6px",
+                  }}
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    setPage("profile");
+                  }}
+                >
+                  👤 Profile
+                </button>
+
+                <button
+                  className="logout-button"
+                  style={{
+                    width: "100%",
+                  }}
+                  onClick={logout}
+                >
+                  🚪 Logout
+                </button>
+
+              </div>
+            )}
+
+          </div>
 
         </header>
 
@@ -785,7 +879,6 @@ function App() {
         <section className="patients-section">
 
           <div className="section-header">
-
             <div>
               <h2>Patient Information</h2>
 
@@ -793,7 +886,6 @@ function App() {
                 Patient details for this treatment.
               </p>
             </div>
-
           </div>
 
           <div className="patient-card">
@@ -848,14 +940,13 @@ function App() {
 
         </section>
 
-        {/* AI RECOMMENDATION */}
+        {/* AI */}
 
         <section className="form-section">
 
           <div className="form-title">
 
             <div>
-
               <h2>
                 🤖 AI Treatment Recommendation
               </h2>
@@ -864,7 +955,6 @@ function App() {
                 Generate treatment parameters using
                 the recommendation engine.
               </p>
-
             </div>
 
             <div className="form-icon">
@@ -935,20 +1025,18 @@ function App() {
 
         </section>
 
-        {/* TREATMENT PARAMETERS */}
+        {/* PARAMETERS */}
 
         <section className="form-section">
 
           <div className="form-title">
 
             <div>
-
               <h2>Treatment Parameters</h2>
 
               <p>
                 Enter manually or use AI recommendation.
               </p>
-
             </div>
 
             <div className="form-icon">
@@ -1064,15 +1152,12 @@ function App() {
               borderRadius: "10px",
             }}
           >
-
             <strong>
               Parameter Source:
             </strong>{" "}
-
             {recommendationMode === "ai"
               ? "AI Recommendation"
               : "Manual Entry"}
-
           </div>
 
           <div
@@ -1205,7 +1290,7 @@ function App() {
         </section>
 
         {/* =================================================
-            AFTER TREATMENT ASSESSMENT POPUP
+            AFTER TREATMENT POPUP
         ================================================= */}
 
         {showAfterTreatmentPopup && (
@@ -1381,7 +1466,6 @@ function App() {
               </div>
 
             </div>
-
           </div>
         )}
 
@@ -1544,26 +1628,83 @@ function App() {
 
   /* =====================================================
      HISTORY PAGE
-     CONTINUOUS CONNECTED GRAPH
+     CONNECTED SESSION GRAPH
   ===================================================== */
 
   if (page === "history") {
+
     return (
       <div className="dashboard">
 
         <header className="dashboard-header">
 
           <div>
-            <h1>Smart IFT</h1>
+            <h1>MY IFT</h1>
             <p>Session History</p>
           </div>
 
-          <button
-            className="logout-button"
-            onClick={logout}
+          <div
+            style={{
+              position: "relative",
+            }}
           >
-            Logout
-          </button>
+
+            <button
+              className="secondary-button"
+              onClick={() =>
+                setShowUserMenu(
+                  (previous) => !previous
+                )
+              }
+            >
+              👤 {username} ▾
+            </button>
+
+            {showUserMenu && (
+              <div
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  top: "calc(100% + 8px)",
+                  background: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "10px",
+                  padding: "8px",
+                  minWidth: "180px",
+                  boxShadow:
+                    "0 10px 30px rgba(0,0,0,0.15)",
+                  zIndex: 1000,
+                }}
+              >
+
+                <button
+                  className="secondary-button"
+                  style={{
+                    width: "100%",
+                    marginBottom: "6px",
+                  }}
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    setPage("profile");
+                  }}
+                >
+                  👤 Profile
+                </button>
+
+                <button
+                  className="logout-button"
+                  style={{
+                    width: "100%",
+                  }}
+                  onClick={logout}
+                >
+                  🚪 Logout
+                </button>
+
+              </div>
+            )}
+
+          </div>
 
         </header>
 
@@ -1621,63 +1762,41 @@ function App() {
                   )
                   .sort(
                     (a, b) =>
-                      Number(a.sessionNumber) -
-                      Number(b.sessionNumber)
+                      a.sessionNumber -
+                      b.sessionNumber
                   );
 
               if (patientSessions.length === 0) {
                 return null;
               }
 
-              /* =========================================
-                 CREATE ONE CONTINUOUS GRAPH
+              const beforeValues =
+                patientSessions.map((session) =>
+                  Number(session.beforePainScore)
+                );
 
-                 S1 BEFORE
-                       ↓
-                 S1 AFTER
-                       ↓
-                 S2 BEFORE
-                       ↓
-                 S2 AFTER
-                       ↓
-                 S3 BEFORE
-                       ↓
-                 S3 AFTER
-              ========================================= */
+              const afterValues =
+                patientSessions.map((session) =>
+                  Number(session.afterPainScore)
+                );
 
-              const graphPoints = [];
+              const allValues = [
+                ...beforeValues,
+                ...afterValues,
+              ];
 
-              patientSessions.forEach((session) => {
+              const maxPain = Math.max(
+                10,
+                ...allValues
+              );
 
-                graphPoints.push({
-                  value: Number(
-                    session.beforePainScore
-                  ),
-                  label: `S${session.sessionNumber} Before`,
-                  sessionNumber:
-                    session.sessionNumber,
-                  type: "before",
-                });
+              const chartWidth = 800;
+              const chartHeight = 320;
 
-                graphPoints.push({
-                  value: Number(
-                    session.afterPainScore
-                  ),
-                  label: `S${session.sessionNumber} After`,
-                  sessionNumber:
-                    session.sessionNumber,
-                  type: "after",
-                });
-
-              });
-
-              const chartWidth = 900;
-              const chartHeight = 380;
-
-              const left = 70;
-              const right = 40;
-              const top = 40;
-              const bottom = 80;
+              const left = 65;
+              const right = 30;
+              const top = 35;
+              const bottom = 60;
 
               const graphWidth =
                 chartWidth - left - right;
@@ -1686,38 +1805,40 @@ function App() {
                 chartHeight - top - bottom;
 
               const getX = (index) => {
-
-                if (graphPoints.length === 1) {
+                if (patientSessions.length === 1) {
                   return left + graphWidth / 2;
                 }
 
                 return (
                   left +
                   (index /
-                    (graphPoints.length - 1)) *
+                    (patientSessions.length - 1)) *
                     graphWidth
                 );
               };
 
               const getY = (value) => {
-
                 return (
                   top +
                   graphHeight -
-                  (value / 10) *
+                  (value / maxPain) *
                     graphHeight
                 );
               };
 
-              /* ONE CONNECTED LINE */
-
-              const connectedPoints =
-                graphPoints
+              const beforePoints =
+                beforeValues
                   .map(
-                    (point, index) =>
-                      `${getX(index)},${getY(
-                        point.value
-                      )}`
+                    (value, index) =>
+                      `${getX(index)},${getY(value)}`
+                  )
+                  .join(" ");
+
+              const afterPoints =
+                afterValues
+                  .map(
+                    (value, index) =>
+                      `${getX(index)},${getY(value)}`
                   )
                   .join(" ");
 
@@ -1783,7 +1904,7 @@ function App() {
 
                   </div>
 
-                  {/* CONTINUOUS GRAPH */}
+                  {/* CONNECTED GRAPH */}
 
                   <div
                     style={{
@@ -1806,8 +1927,9 @@ function App() {
                         color: "#64748b",
                       }}
                     >
-                      Continuous pain-score trend across
-                      all treatment sessions.
+                      Connected pain-score trend across
+                      Session 1, Session 2, Session 3 and
+                      future sessions.
                     </p>
 
                     <div
@@ -1820,12 +1942,13 @@ function App() {
                       <svg
                         viewBox={`0 0 ${chartWidth} ${chartHeight}`}
                         width="100%"
-                        height="380"
+                        height="320"
                         style={{
                           minWidth:
-                            graphPoints.length > 6
-                              ? "800px"
-                              : "600px",
+                            patientSessions.length >
+                            5
+                              ? "700px"
+                              : "500px",
                         }}
                       >
 
@@ -1901,12 +2024,10 @@ function App() {
                           strokeWidth="2"
                         />
 
-                        {/* =================================
-                            ONE CONTINUOUS LINE
-                        ================================= */}
+                        {/* BEFORE LINE */}
 
                         <polyline
-                          points={connectedPoints}
+                          points={beforePoints}
                           fill="none"
                           stroke="#2563eb"
                           strokeWidth="4"
@@ -1914,82 +2035,91 @@ function App() {
                           strokeLinejoin="round"
                         />
 
-                        {/* GRAPH POINTS */}
+                        {/* AFTER LINE */}
 
-                        {graphPoints.map(
-                          (point, index) => {
+                        <polyline
+                          points={afterPoints}
+                          fill="none"
+                          stroke="#16a34a"
+                          strokeWidth="4"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+
+                        {/* POINTS */}
+
+                        {patientSessions.map(
+                          (session, index) => {
 
                             const x =
                               getX(index);
 
-                            const y =
-                              getY(point.value);
+                            const beforeY =
+                              getY(
+                                Number(
+                                  session.beforePainScore
+                                )
+                              );
 
-                            const isBefore =
-                              point.type ===
-                              "before";
+                            const afterY =
+                              getY(
+                                Number(
+                                  session.afterPainScore
+                                )
+                              );
 
                             return (
                               <g
-                                key={`${point.sessionNumber}-${point.type}`}
+                                key={
+                                  session.id
+                                }
                               >
-
-                                {/* POINT */}
 
                                 <circle
                                   cx={x}
-                                  cy={y}
-                                  r="7"
-                                  fill={
-                                    isBefore
-                                      ? "#2563eb"
-                                      : "#16a34a"
-                                  }
-                                  stroke="#ffffff"
-                                  strokeWidth="3"
+                                  cy={beforeY}
+                                  r="6"
+                                  fill="#2563eb"
                                 />
-
-                                {/* VALUE */}
 
                                 <text
                                   x={x}
                                   y={
-                                    isBefore
-                                      ? y - 14
-                                      : y + 25
+                                    beforeY -
+                                    12
                                   }
                                   textAnchor="middle"
                                   fontSize="12"
                                   fontWeight="700"
-                                  fill={
-                                    isBefore
-                                      ? "#2563eb"
-                                      : "#16a34a"
-                                  }
+                                  fill="#2563eb"
                                 >
-                                  {point.value}
+                                  {
+                                    session.beforePainScore
+                                  }
                                 </text>
 
-                                {/* SESSION LABEL */}
+                                <circle
+                                  cx={x}
+                                  cy={afterY}
+                                  r="6"
+                                  fill="#16a34a"
+                                />
 
                                 <text
                                   x={x}
                                   y={
-                                    chartHeight -
-                                    42
+                                    afterY +
+                                    20
                                   }
                                   textAnchor="middle"
-                                  fontSize="11"
+                                  fontSize="12"
                                   fontWeight="700"
-                                  fill="#334155"
+                                  fill="#16a34a"
                                 >
-                                  Session{" "}
                                   {
-                                    point.sessionNumber
+                                    session.afterPainScore
                                   }
                                 </text>
-
-                                {/* BEFORE / AFTER */}
 
                                 <text
                                   x={x}
@@ -1998,12 +2128,14 @@ function App() {
                                     25
                                   }
                                   textAnchor="middle"
-                                  fontSize="10"
-                                  fill="#64748b"
+                                  fontSize="13"
+                                  fontWeight="700"
+                                  fill="#334155"
                                 >
-                                  {isBefore
-                                    ? "Before"
-                                    : "After"}
+                                  Session{" "}
+                                  {
+                                    session.sessionNumber
+                                  }
                                 </text>
 
                               </g>
@@ -2215,22 +2347,79 @@ function App() {
   ===================================================== */
 
   if (page === "patients") {
+
     return (
       <div className="dashboard">
 
         <header className="dashboard-header">
 
           <div>
-            <h1>Smart IFT</h1>
+            <h1>MY IFT</h1>
             <p>Patients</p>
           </div>
 
-          <button
-            className="logout-button"
-            onClick={logout}
+          <div
+            style={{
+              position: "relative",
+            }}
           >
-            Logout
-          </button>
+
+            <button
+              className="secondary-button"
+              onClick={() =>
+                setShowUserMenu(
+                  (previous) => !previous
+                )
+              }
+            >
+              👤 {username} ▾
+            </button>
+
+            {showUserMenu && (
+              <div
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  top: "calc(100% + 8px)",
+                  background: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "10px",
+                  padding: "8px",
+                  minWidth: "180px",
+                  boxShadow:
+                    "0 10px 30px rgba(0,0,0,0.15)",
+                  zIndex: 1000,
+                }}
+              >
+
+                <button
+                  className="secondary-button"
+                  style={{
+                    width: "100%",
+                    marginBottom: "6px",
+                  }}
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    setPage("profile");
+                  }}
+                >
+                  👤 Profile
+                </button>
+
+                <button
+                  className="logout-button"
+                  style={{
+                    width: "100%",
+                  }}
+                  onClick={logout}
+                >
+                  🚪 Logout
+                </button>
+
+              </div>
+            )}
+
+          </div>
 
         </header>
 
@@ -2258,14 +2447,12 @@ function App() {
           <div className="section-header">
 
             <div>
-
               <h2>Patient List</h2>
 
               <p>
                 {patients.length} patient
                 {patients.length !== 1 ? "s" : ""}
               </p>
-
             </div>
 
             <button
@@ -2390,26 +2577,83 @@ function App() {
   }
 
   /* =====================================================
-     ADD PATIENT PAGE
+     ADD PATIENT
   ===================================================== */
 
   if (page === "add-patient") {
+
     return (
       <div className="dashboard">
 
         <header className="dashboard-header">
 
           <div>
-            <h1>Smart IFT</h1>
+            <h1>MY IFT</h1>
             <p>Add Patient</p>
           </div>
 
-          <button
-            className="logout-button"
-            onClick={logout}
+          <div
+            style={{
+              position: "relative",
+            }}
           >
-            Logout
-          </button>
+
+            <button
+              className="secondary-button"
+              onClick={() =>
+                setShowUserMenu(
+                  (previous) => !previous
+                )
+              }
+            >
+              👤 {username} ▾
+            </button>
+
+            {showUserMenu && (
+              <div
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  top: "calc(100% + 8px)",
+                  background: "#ffffff",
+                  border: "1px solid #e2e8f0",
+                  borderRadius: "10px",
+                  padding: "8px",
+                  minWidth: "180px",
+                  boxShadow:
+                    "0 10px 30px rgba(0,0,0,0.15)",
+                  zIndex: 1000,
+                }}
+              >
+
+                <button
+                  className="secondary-button"
+                  style={{
+                    width: "100%",
+                    marginBottom: "6px",
+                  }}
+                  onClick={() => {
+                    setShowUserMenu(false);
+                    setPage("profile");
+                  }}
+                >
+                  👤 Profile
+                </button>
+
+                <button
+                  className="logout-button"
+                  style={{
+                    width: "100%",
+                  }}
+                  onClick={logout}
+                >
+                  🚪 Logout
+                </button>
+
+              </div>
+            )}
+
+          </div>
 
         </header>
 
@@ -2637,7 +2881,7 @@ function App() {
         <div>
 
           <h1>
-            Smart IFT
+            MY IFT
           </h1>
 
           <p>
@@ -2648,27 +2892,64 @@ function App() {
 
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "15px",
+            position: "relative",
           }}
         >
 
           <button
             className="secondary-button"
             onClick={() =>
-              setPage("profile")
+              setShowUserMenu(
+                (previous) => !previous
+              )
             }
           >
-            👤 {username}
+            👤 {username} ▾
           </button>
 
-          <button
-            className="logout-button"
-            onClick={logout}
-          >
-            Logout
-          </button>
+          {showUserMenu && (
+            <div
+              style={{
+                position: "absolute",
+                right: 0,
+                top: "calc(100% + 8px)",
+                background: "#ffffff",
+                border: "1px solid #e2e8f0",
+                borderRadius: "10px",
+                padding: "8px",
+                minWidth: "180px",
+                boxShadow:
+                  "0 10px 30px rgba(0,0,0,0.15)",
+                zIndex: 1000,
+              }}
+            >
+
+              <button
+                className="secondary-button"
+                style={{
+                  width: "100%",
+                  marginBottom: "6px",
+                }}
+                onClick={() => {
+                  setShowUserMenu(false);
+                  setPage("profile");
+                }}
+              >
+                👤 Profile
+              </button>
+
+              <button
+                className="logout-button"
+                style={{
+                  width: "100%",
+                }}
+                onClick={logout}
+              >
+                🚪 Logout
+              </button>
+
+            </div>
+          )}
 
         </div>
 
@@ -2677,7 +2958,7 @@ function App() {
       <section className="welcome-section">
 
         <h2>
-          Smart IFT Dashboard
+          MY IFT Dashboard
         </h2>
 
         <p>
