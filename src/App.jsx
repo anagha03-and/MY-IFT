@@ -21,7 +21,7 @@ const EMPTY_PARAMETERS = {
 
 function App() {
   /* =====================================================
-     USER / LOGIN
+     LOGIN
   ===================================================== */
 
   const [loggedIn, setLoggedIn] = useState(() => {
@@ -35,34 +35,17 @@ function App() {
   const [page, setPage] = useState("dashboard");
 
   /* =====================================================
-     ALL USERS' DATA
-
-     Structure:
-     {
-       username1: {
-         patients: [],
-         sessions: []
-       },
-       username2: {
-         patients: [],
-         sessions: []
-       }
-     }
+     USERS DATA
   ===================================================== */
 
   const [usersData, setUsersData] = useState(() => {
     try {
       const saved = localStorage.getItem("smartIFT_users");
-
       return saved ? JSON.parse(saved) : {};
     } catch {
       return {};
     }
   });
-
-  /* =====================================================
-     CURRENT USER DATA
-  ===================================================== */
 
   const currentUserData = usersData[username] || {
     patients: [],
@@ -76,46 +59,27 @@ function App() {
      SELECTED PATIENT
   ===================================================== */
 
-  const [selectedPatient, setSelectedPatient] =
-    useState(null);
+  const [selectedPatient, setSelectedPatient] = useState(null);
 
   /* =====================================================
      PATIENT FORM
   ===================================================== */
 
-  const [patientForm, setPatientForm] = useState(
-    EMPTY_PATIENT_FORM
-  );
+  const [patientForm, setPatientForm] =
+    useState(EMPTY_PATIENT_FORM);
 
   /* =====================================================
-     PROFILE
-  ===================================================== */
-
-  const [showProfile, setShowProfile] = useState(false);
-
-  /* =====================================================
-     TREATMENT PARAMETERS
-
-     These are kept separately so that typing in them
-     never changes patient pain score or old sessions.
+     TREATMENT
   ===================================================== */
 
   const [treatmentParameters, setTreatmentParameters] =
     useState(EMPTY_PARAMETERS);
-
-  /* =====================================================
-     AI
-  ===================================================== */
 
   const [aiRecommendation, setAiRecommendation] =
     useState(null);
 
   const [recommendationMode, setRecommendationMode] =
     useState("manual");
-
-  /* =====================================================
-     MACHINE
-  ===================================================== */
 
   const [machineSent, setMachineSent] = useState(false);
 
@@ -133,14 +97,17 @@ function App() {
     useState("");
 
   /* =====================================================
-     SAFETY POPUP
+     POPUPS
   ===================================================== */
 
   const [showSafetyWarning, setShowSafetyWarning] =
     useState(false);
 
+  const [showAfterTreatmentPopup, setShowAfterTreatmentPopup] =
+    useState(false);
+
   /* =====================================================
-     SAVE ALL USERS DATA
+     SAVE USERS DATA
   ===================================================== */
 
   useEffect(() => {
@@ -156,15 +123,8 @@ function App() {
 
   useEffect(() => {
     if (loggedIn && username) {
-      localStorage.setItem(
-        "smartIFT_loggedIn",
-        "true"
-      );
-
-      localStorage.setItem(
-        "smartIFT_username",
-        username
-      );
+      localStorage.setItem("smartIFT_loggedIn", "true");
+      localStorage.setItem("smartIFT_username", username);
     }
   }, [loggedIn, username]);
 
@@ -185,7 +145,7 @@ function App() {
   }, [sessionStatus]);
 
   /* =====================================================
-     AUTOMATIC SESSION COMPLETION
+     AUTOMATIC COMPLETION
   ===================================================== */
 
   useEffect(() => {
@@ -199,6 +159,7 @@ function App() {
 
       if (sessionSeconds >= durationSeconds) {
         setSessionStatus("completed");
+        setShowAfterTreatmentPopup(true);
       }
     }
   }, [
@@ -213,7 +174,6 @@ function App() {
 
   const formatTime = (seconds) => {
     const minutes = Math.floor(seconds / 60);
-
     const remainingSeconds = seconds % 60;
 
     return `${String(minutes).padStart(2, "0")}:${String(
@@ -222,12 +182,7 @@ function App() {
   };
 
   /* =====================================================
-     UPDATE CURRENT USER DATA
-
-     This function is the main fix.
-
-     Every patient/session is saved inside the current
-     username's account.
+     UPDATE USER DATA
   ===================================================== */
 
   const updateCurrentUserData = (newData) => {
@@ -249,7 +204,7 @@ function App() {
   };
 
   /* =====================================================
-     PATIENT FORM CHANGE
+     PATIENT FORM
   ===================================================== */
 
   const handlePatientChange = (e) => {
@@ -274,24 +229,15 @@ function App() {
     }
 
     const newPatient = {
-      id: `P${String(patients.length + 1).padStart(
-        3,
-        "0"
-      )}`,
-
+      id: `P${String(patients.length + 1).padStart(3, "0")}`,
       username,
-
       name: patientForm.name,
       age: patientForm.age,
       gender: patientForm.gender,
       phone: patientForm.phone,
       diagnosis: patientForm.diagnosis,
-
-      /* Preserve exactly what the user entered */
       painScore: patientForm.painScore,
-
       notes: patientForm.notes,
-
       createdAt: new Date().toLocaleString(),
     };
 
@@ -300,50 +246,34 @@ function App() {
     });
 
     setPatientForm(EMPTY_PATIENT_FORM);
-
     setPage("patients");
   };
 
   /* =====================================================
-     OPEN PATIENT / NEW SESSION
+     OPEN TREATMENT
   ===================================================== */
 
   const openTreatment = (patient) => {
     setSelectedPatient(patient);
 
-    /*
-      IMPORTANT:
-      Every new session starts with EMPTY treatment
-      parameters.
-
-      Nothing from the previous session is copied.
-    */
-
     setTreatmentParameters({
-      carrierFrequency: "",
-      beatFrequency: "",
-      intensity: "",
-      duration: "",
-      notes: "",
+      ...EMPTY_PARAMETERS,
     });
 
     setAiRecommendation(null);
-
     setRecommendationMode("manual");
-
     setMachineSent(false);
-
     setSessionStatus("not-started");
-
     setSessionSeconds(0);
-
     setAfterPainScore("");
+    setShowAfterTreatmentPopup(false);
+    setShowSafetyWarning(false);
 
     setPage("treatment");
   };
 
   /* =====================================================
-     TREATMENT PARAMETER CHANGE
+     TREATMENT CHANGE
   ===================================================== */
 
   const handleTreatmentChange = (e) => {
@@ -356,21 +286,11 @@ function App() {
   };
 
   /* =====================================================
-     AI RECOMMENDATION DEMO
-
-     Later this function will call your ML backend.
+     AI RECOMMENDATION
   ===================================================== */
 
   const generateAIRecommendation = () => {
-    if (!selectedPatient) {
-      return;
-    }
-
-    /*
-      Do NOT change the patient's pain score here.
-
-      We only READ it.
-    */
+    if (!selectedPatient) return;
 
     const pain = Number(selectedPatient.painScore);
 
@@ -403,26 +323,20 @@ function App() {
   };
 
   /* =====================================================
-     APPLY AI RECOMMENDATION
+     APPLY AI
   ===================================================== */
 
   const applyAIRecommendation = () => {
-    if (!aiRecommendation) {
-      return;
-    }
+    if (!aiRecommendation) return;
 
     setTreatmentParameters((previous) => ({
       ...previous,
-
       carrierFrequency:
         aiRecommendation.carrierFrequency,
-
       beatFrequency:
         aiRecommendation.beatFrequency,
-
       intensity:
         aiRecommendation.intensity,
-
       duration:
         aiRecommendation.duration,
     }));
@@ -441,17 +355,14 @@ function App() {
       !treatmentParameters.intensity ||
       !treatmentParameters.duration
     ) {
-      alert(
-        "Please enter all treatment parameters first."
-      );
-
+      alert("Please enter all treatment parameters first.");
       return;
     }
 
     setMachineSent(true);
 
     alert(
-      "Treatment parameters are ready to be sent to the IFT machine.\n\nESP32/backend integration will be connected later."
+      "Treatment parameters are ready to be sent to the IFT machine.\n\nESP32/backend integration can be connected later."
     );
   };
 
@@ -464,7 +375,6 @@ function App() {
       alert(
         "Please click 'Send to Machine' before starting the session."
       );
-
       return;
     }
 
@@ -474,10 +384,7 @@ function App() {
       !treatmentParameters.intensity ||
       !treatmentParameters.duration
     ) {
-      alert(
-        "Please enter all treatment parameters."
-      );
-
+      alert("Please enter all treatment parameters.");
       return;
     }
 
@@ -485,14 +392,14 @@ function App() {
   };
 
   /* =====================================================
-     CONFIRM SAFETY
+     SAFETY CONFIRM
   ===================================================== */
 
   const confirmSafetyAndStart = () => {
     setShowSafetyWarning(false);
-
     setSessionSeconds(0);
-
+    setAfterPainScore("");
+    setShowAfterTreatmentPopup(false);
     setSessionStatus("running");
   };
 
@@ -518,35 +425,37 @@ function App() {
 
   const stopSession = () => {
     setSessionStatus("stopped");
+    setShowAfterTreatmentPopup(true);
   };
 
   /* =====================================================
-     SAVE COMPLETED SESSION
-
-     IMPORTANT:
-     This APPENDS a new session.
-
-     It NEVER replaces previous sessions.
+     SAVE SESSION
   ===================================================== */
 
   const saveSession = () => {
-    if (!selectedPatient) {
-      return;
-    }
+    if (!selectedPatient) return;
 
     if (afterPainScore === "") {
       alert(
         "Please enter the patient's after-treatment pain score."
       );
-
       return;
     }
+
+    const patientSessions = sessionHistory.filter(
+      (session) =>
+        session.patientId === selectedPatient.id
+    );
+
+    const sessionNumber = patientSessions.length + 1;
 
     const newSession = {
       id: `S${String(sessionHistory.length + 1).padStart(
         3,
         "0"
       )}`,
+
+      sessionNumber,
 
       username,
 
@@ -584,21 +493,26 @@ function App() {
         formatTime(sessionSeconds),
     };
 
-    /* ================================================
-       ADD NEW SESSION TO EXISTING HISTORY
-    ================================================= */
-
     const updatedSessions = [
       ...sessionHistory,
       newSession,
     ];
 
-    /* ================================================
-       UPDATE PATIENT'S CURRENT PAIN SCORE
+    /*
+      IMPORTANT:
+      The patient's pain score is updated to the
+      after-treatment score.
 
-       Only the patient's current pain score changes.
-       Previous sessions remain untouched.
-    ================================================= */
+      Therefore, when the next session starts:
+
+      Session 1 After = 6
+      ↓
+      Session 2 Before = 6
+      ↓
+      Session 2 After = 4
+      ↓
+      Session 3 Before = 4
+    */
 
     const updatedPatients = patients.map(
       (patient) => {
@@ -608,32 +522,26 @@ function App() {
 
         return {
           ...patient,
-
           painScore: afterPainScore,
         };
       }
     );
 
-    /* ================================================
-       SAVE BOTH PATIENT + SESSION DATA
-    ================================================= */
-
     updateCurrentUserData({
       patients: updatedPatients,
-
       sessions: updatedSessions,
     });
 
-    /* Update screen state too */
-
     setSelectedPatient((previous) => ({
       ...previous,
-
       painScore: afterPainScore,
     }));
 
+    setShowAfterTreatmentPopup(false);
+    setAfterPainScore("");
+
     alert(
-      "Session saved successfully.\n\nThe complete session has been added to this user's history."
+      `Session ${sessionNumber} saved successfully.`
     );
 
     setPage("patients");
@@ -645,20 +553,12 @@ function App() {
 
   const logout = () => {
     setLoggedIn(false);
-
     setUsername("");
-
     setSelectedPatient(null);
-
     setPage("dashboard");
 
-    localStorage.removeItem(
-      "smartIFT_loggedIn"
-    );
-
-    localStorage.removeItem(
-      "smartIFT_username"
-    );
+    localStorage.removeItem("smartIFT_loggedIn");
+    localStorage.removeItem("smartIFT_username");
   };
 
   /* =====================================================
@@ -688,16 +588,7 @@ function App() {
               const enteredUsername =
                 e.target.username.value.trim();
 
-              if (!enteredUsername) {
-                return;
-              }
-
-              /*
-                Create account data if this is a new
-                username.
-
-                Existing username data is NOT deleted.
-              */
+              if (!enteredUsername) return;
 
               setUsersData((previous) => ({
                 ...previous,
@@ -722,14 +613,11 @@ function App() {
               );
 
               setLoggedIn(true);
-
               setPage("dashboard");
             }}
           >
 
-            <label>
-              Username
-            </label>
+            <label>Username</label>
 
             <input
               name="username"
@@ -738,9 +626,7 @@ function App() {
               required
             />
 
-            <label>
-              Password
-            </label>
+            <label>Password</label>
 
             <input
               name="password"
@@ -776,15 +662,8 @@ function App() {
         <header className="dashboard-header">
 
           <div>
-
-            <h1>
-              Smart IFT
-            </h1>
-
-            <p>
-              User Profile
-            </p>
-
+            <h1>Smart IFT</h1>
+            <p>User Profile</p>
           </div>
 
           <button
@@ -807,9 +686,7 @@ function App() {
             ← Back to Dashboard
           </button>
 
-          <h2>
-            User Profile
-          </h2>
+          <h2>User Profile</h2>
 
           <p>
             Your Smart IFT account.
@@ -827,43 +704,21 @@ function App() {
 
             <div className="patient-details">
 
-              <div className="patient-title">
-
-                <h3>
-                  {username}
-                </h3>
-
-              </div>
+              <h3>{username}</h3>
 
               <p>
-                <strong>
-                  Username:
-                </strong>{" "}
+                <strong>Username:</strong>{" "}
                 {username}
               </p>
 
               <p>
-                <strong>
-                  Number of Patients:
-                </strong>{" "}
+                <strong>Number of Patients:</strong>{" "}
                 {patients.length}
               </p>
 
               <p>
-                <strong>
-                  Total Sessions:
-                </strong>{" "}
+                <strong>Total Sessions:</strong>{" "}
                 {sessionHistory.length}
-              </p>
-
-              <p>
-                <strong>
-                  Previous Session Pain Score:
-                </strong>{" "}
-
-                {sessionHistory.length > 0
-                  ? `${sessionHistory[sessionHistory.length - 1].afterPainScore}/10`
-                  : "No sessions yet"}
               </p>
 
             </div>
@@ -890,15 +745,8 @@ function App() {
         <header className="dashboard-header">
 
           <div>
-
-            <h1>
-              Smart IFT
-            </h1>
-
-            <p>
-              Treatment Session
-            </p>
-
+            <h1>Smart IFT</h1>
+            <p>Treatment Session</p>
           </div>
 
           <button
@@ -921,9 +769,7 @@ function App() {
             ← Back to Patients
           </button>
 
-          <h2>
-            Treatment Session
-          </h2>
+          <h2>Treatment Session</h2>
 
           <p>
             Configure treatment for{" "}
@@ -941,16 +787,11 @@ function App() {
           <div className="section-header">
 
             <div>
-
-              <h2>
-                Patient Information
-              </h2>
+              <h2>Patient Information</h2>
 
               <p>
-                Patient details are stored under the
-                logged-in username.
+                Patient details for this treatment.
               </p>
-
             </div>
 
           </div>
@@ -992,16 +833,12 @@ function App() {
               </div>
 
               <p>
-                <strong>
-                  Diagnosis:
-                </strong>{" "}
+                <strong>Diagnosis:</strong>{" "}
                 {selectedPatient.diagnosis}
               </p>
 
               <p>
-                <strong>
-                  Current Pain Score:
-                </strong>{" "}
+                <strong>Current Pain Score:</strong>{" "}
                 {selectedPatient.painScore}/10
               </p>
 
@@ -1011,7 +848,7 @@ function App() {
 
         </section>
 
-        {/* AI */}
+        {/* AI RECOMMENDATION */}
 
         <section className="form-section">
 
@@ -1025,7 +862,7 @@ function App() {
 
               <p>
                 Generate treatment parameters using
-                the ML model.
+                the recommendation engine.
               </p>
 
             </div>
@@ -1038,9 +875,7 @@ function App() {
 
           <button
             className="primary-button"
-            onClick={
-              generateAIRecommendation
-            }
+            onClick={generateAIRecommendation}
           >
             Generate AI Recommendation
           </button>
@@ -1052,8 +887,7 @@ function App() {
                 padding: "20px",
                 background: "#f8fafc",
                 borderRadius: "10px",
-                border:
-                  "1px solid #dbe3ef",
+                border: "1px solid #dbe3ef",
               }}
             >
 
@@ -1064,48 +898,34 @@ function App() {
               <p>
                 Carrier Frequency:{" "}
                 <strong>
-                  {
-                    aiRecommendation.carrierFrequency
-                  }{" "}
-                  Hz
+                  {aiRecommendation.carrierFrequency} Hz
                 </strong>
               </p>
 
               <p>
                 Beat Frequency:{" "}
                 <strong>
-                  {
-                    aiRecommendation.beatFrequency
-                  }{" "}
-                  Hz
+                  {aiRecommendation.beatFrequency} Hz
                 </strong>
               </p>
 
               <p>
                 Intensity:{" "}
                 <strong>
-                  {
-                    aiRecommendation.intensity
-                  }{" "}
-                  mA
+                  {aiRecommendation.intensity} mA
                 </strong>
               </p>
 
               <p>
                 Duration:{" "}
                 <strong>
-                  {
-                    aiRecommendation.duration
-                  }{" "}
-                  minutes
+                  {aiRecommendation.duration} minutes
                 </strong>
               </p>
 
               <button
                 className="primary-button"
-                onClick={
-                  applyAIRecommendation
-                }
+                onClick={applyAIRecommendation}
               >
                 Use AI Recommendation
               </button>
@@ -1123,12 +943,10 @@ function App() {
 
             <div>
 
-              <h2>
-                Treatment Parameters
-              </h2>
+              <h2>Treatment Parameters</h2>
 
               <p>
-                Enter manually or use the AI recommendation.
+                Enter manually or use AI recommendation.
               </p>
 
             </div>
@@ -1153,9 +971,7 @@ function App() {
                 value={
                   treatmentParameters.carrierFrequency
                 }
-                onChange={
-                  handleTreatmentChange
-                }
+                onChange={handleTreatmentChange}
                 placeholder="Example: 4000"
                 min="1"
               />
@@ -1174,9 +990,7 @@ function App() {
                 value={
                   treatmentParameters.beatFrequency
                 }
-                onChange={
-                  handleTreatmentChange
-                }
+                onChange={handleTreatmentChange}
                 placeholder="Example: 100"
                 min="1"
               />
@@ -1195,9 +1009,7 @@ function App() {
                 value={
                   treatmentParameters.intensity
                 }
-                onChange={
-                  handleTreatmentChange
-                }
+                onChange={handleTreatmentChange}
                 placeholder="Enter intensity"
                 min="0"
                 step="0.1"
@@ -1217,9 +1029,7 @@ function App() {
                 value={
                   treatmentParameters.duration
                 }
-                onChange={
-                  handleTreatmentChange
-                }
+                onChange={handleTreatmentChange}
                 placeholder="Example: 15"
                 min="1"
               />
@@ -1237,9 +1047,7 @@ function App() {
                 value={
                   treatmentParameters.notes
                 }
-                onChange={
-                  handleTreatmentChange
-                }
+                onChange={handleTreatmentChange}
                 placeholder="Enter treatment observations..."
                 rows="4"
               />
@@ -1306,15 +1114,11 @@ function App() {
           <div className="section-header">
 
             <div>
-
-              <h2>
-                Session Control
-              </h2>
+              <h2>Session Control</h2>
 
               <p>
                 Control the treatment session.
               </p>
-
             </div>
 
           </div>
@@ -1344,8 +1148,7 @@ function App() {
               {formatTime(sessionSeconds)}
             </h1>
 
-            {sessionStatus ===
-              "not-started" && (
+            {sessionStatus === "not-started" && (
               <button
                 className="primary-button"
                 onClick={startSession}
@@ -1368,8 +1171,7 @@ function App() {
                 className="secondary-button"
                 onClick={pauseSession}
                 disabled={
-                  sessionStatus !==
-                  "running"
+                  sessionStatus !== "running"
                 }
               >
                 ⏸ Pause
@@ -1379,8 +1181,7 @@ function App() {
                 className="primary-button"
                 onClick={continueSession}
                 disabled={
-                  sessionStatus !==
-                  "paused"
+                  sessionStatus !== "paused"
                 }
               >
                 ▶ Continue
@@ -1390,10 +1191,8 @@ function App() {
                 className="logout-button"
                 onClick={stopSession}
                 disabled={
-                  sessionStatus !==
-                    "running" &&
-                  sessionStatus !==
-                    "paused"
+                  sessionStatus !== "running" &&
+                  sessionStatus !== "paused"
                 }
               >
                 ⏹ Stop
@@ -1405,94 +1204,202 @@ function App() {
 
         </section>
 
-        {/* AFTER TREATMENT */}
+        {/* =================================================
+            AFTER TREATMENT ASSESSMENT POPUP
+        ================================================= */}
 
-        {(sessionStatus === "completed" ||
-          sessionStatus === "stopped") && (
-
-          <section className="form-section">
-
-            <div className="form-title">
-
-              <div>
-
-                <h2>
-                  After Treatment Assessment
-                </h2>
-
-                <p>
-                  Ask the patient for their pain
-                  score after treatment.
-                </p>
-
-              </div>
-
-              <div className="form-icon">
-                📊
-              </div>
-
-            </div>
-
-            <div className="form-group">
-
-              <label>
-                After Treatment Pain Score (0–10)
-              </label>
-
-              <input
-                type="number"
-                value={afterPainScore}
-                onChange={(e) =>
-                  setAfterPainScore(
-                    e.target.value
-                  )
-                }
-                placeholder="Enter score given by patient"
-                min="0"
-                max="10"
-              />
-
-            </div>
-
-            <div className="form-actions">
-
-              <button
-                className="secondary-button"
-                onClick={() =>
-                  setPage("patients")
-                }
-              >
-                Cancel
-              </button>
-
-              <button
-                className="primary-button"
-                onClick={saveSession}
-              >
-                💾 Save Session
-              </button>
-
-            </div>
-
-          </section>
-
-        )}
-
-        {/* SAFETY POPUP */}
-
-        {showSafetyWarning && (
-
+        {showAfterTreatmentPopup && (
           <div
             style={{
               position: "fixed",
-              inset: "0",
-              background:
-                "rgba(0,0,0,0.55)",
+              inset: 0,
+              background: "rgba(15, 23, 42, 0.65)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               padding: "20px",
-              zIndex: "9999",
+              zIndex: 10000,
+            }}
+          >
+
+            <div
+              style={{
+                width: "100%",
+                maxWidth: "520px",
+                background: "#ffffff",
+                borderRadius: "20px",
+                padding: "30px",
+                boxShadow:
+                  "0 20px 60px rgba(0,0,0,0.3)",
+              }}
+            >
+
+              <div
+                style={{
+                  textAlign: "center",
+                  fontSize: "48px",
+                  marginBottom: "10px",
+                }}
+              >
+                📊
+              </div>
+
+              <h2
+                style={{
+                  textAlign: "center",
+                  marginBottom: "8px",
+                }}
+              >
+                After Treatment Assessment
+              </h2>
+
+              <p
+                style={{
+                  textAlign: "center",
+                  color: "#64748b",
+                  marginBottom: "25px",
+                }}
+              >
+                Treatment session has ended for{" "}
+                <strong>
+                  {selectedPatient.name}
+                </strong>
+              </p>
+
+              <div
+                style={{
+                  background: "#f8fafc",
+                  borderRadius: "12px",
+                  padding: "18px",
+                  marginBottom: "20px",
+                }}
+              >
+
+                <p>
+                  <strong>
+                    Before Treatment Pain:
+                  </strong>{" "}
+                  {selectedPatient.painScore}/10
+                </p>
+
+                <p>
+                  <strong>
+                    Session Duration:
+                  </strong>{" "}
+                  {formatTime(sessionSeconds)}
+                </p>
+
+                <p>
+                  <strong>
+                    Session Status:
+                  </strong>{" "}
+                  {sessionStatus}
+                </p>
+
+              </div>
+
+              <div className="form-group">
+
+                <label
+                  style={{
+                    fontWeight: "700",
+                    display: "block",
+                    marginBottom: "8px",
+                  }}
+                >
+                  After Treatment Pain Score (0–10)
+                </label>
+
+                <input
+                  type="number"
+                  value={afterPainScore}
+                  onChange={(e) => {
+                    const value = e.target.value;
+
+                    if (
+                      value === "" ||
+                      (Number(value) >= 0 &&
+                        Number(value) <= 10)
+                    ) {
+                      setAfterPainScore(value);
+                    }
+                  }}
+                  placeholder="Enter patient's pain score"
+                  min="0"
+                  max="10"
+                  step="1"
+                  autoFocus
+                  style={{
+                    width: "100%",
+                    fontSize: "20px",
+                    padding: "14px",
+                    textAlign: "center",
+                  }}
+                />
+
+              </div>
+
+              <div
+                style={{
+                  marginTop: "15px",
+                  padding: "12px",
+                  background: "#eff6ff",
+                  borderRadius: "10px",
+                  color: "#1e40af",
+                }}
+              >
+                💡 Enter the pain score reported by the
+                patient immediately after treatment.
+              </div>
+
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "flex-end",
+                  gap: "12px",
+                  marginTop: "25px",
+                  flexWrap: "wrap",
+                }}
+              >
+
+                <button
+                  className="secondary-button"
+                  onClick={() => {
+                    setShowAfterTreatmentPopup(false);
+                  }}
+                >
+                  Cancel
+                </button>
+
+                <button
+                  className="primary-button"
+                  onClick={saveSession}
+                >
+                  💾 Save Session
+                </button>
+
+              </div>
+
+            </div>
+
+          </div>
+        )}
+
+        {/* =================================================
+            SAFETY POPUP
+        ================================================= */}
+
+        {showSafetyWarning && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.55)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "20px",
+              zIndex: 9999,
             }}
           >
 
@@ -1583,7 +1490,7 @@ function App() {
                 <strong>
                   If any answer is YES → do not start
                   automatically; refer to a qualified
-                  physiotherapist/doctor for assessment.
+                  physiotherapist/doctor.
                 </strong>
 
               </div>
@@ -1619,9 +1526,7 @@ function App() {
 
                 <button
                   className="primary-button"
-                  onClick={
-                    confirmSafetyAndStart
-                  }
+                  onClick={confirmSafetyAndStart}
                 >
                   ✓ Safety Checked — Start Session
                 </button>
@@ -1631,7 +1536,6 @@ function App() {
             </div>
 
           </div>
-
         )}
 
       </div>
@@ -1639,7 +1543,8 @@ function App() {
   }
 
   /* =====================================================
-     SESSION HISTORY
+     HISTORY PAGE
+     CONTINUOUS CONNECTED GRAPH
   ===================================================== */
 
   if (page === "history") {
@@ -1649,15 +1554,8 @@ function App() {
         <header className="dashboard-header">
 
           <div>
-
-            <h1>
-              Smart IFT
-            </h1>
-
-            <p>
-              Session History
-            </p>
-
+            <h1>Smart IFT</h1>
+            <p>Session History</p>
           </div>
 
           <button
@@ -1685,10 +1583,8 @@ function App() {
           </h2>
 
           <p>
-            All sessions saved under username{" "}
-            <strong>
-              {username}
-            </strong>
+            All treatment sessions for{" "}
+            <strong>{username}</strong>
           </p>
 
         </section>
@@ -1715,18 +1611,135 @@ function App() {
 
           ) : (
 
-            <div className="patient-list">
+            patients.map((patient) => {
 
-              {sessionHistory.map(
-                (session) => (
+              const patientSessions =
+                sessionHistory
+                  .filter(
+                    (session) =>
+                      session.patientId === patient.id
+                  )
+                  .sort(
+                    (a, b) =>
+                      Number(a.sessionNumber) -
+                      Number(b.sessionNumber)
+                  );
+
+              if (patientSessions.length === 0) {
+                return null;
+              }
+
+              /* =========================================
+                 CREATE ONE CONTINUOUS GRAPH
+
+                 S1 BEFORE
+                       ↓
+                 S1 AFTER
+                       ↓
+                 S2 BEFORE
+                       ↓
+                 S2 AFTER
+                       ↓
+                 S3 BEFORE
+                       ↓
+                 S3 AFTER
+              ========================================= */
+
+              const graphPoints = [];
+
+              patientSessions.forEach((session) => {
+
+                graphPoints.push({
+                  value: Number(
+                    session.beforePainScore
+                  ),
+                  label: `S${session.sessionNumber} Before`,
+                  sessionNumber:
+                    session.sessionNumber,
+                  type: "before",
+                });
+
+                graphPoints.push({
+                  value: Number(
+                    session.afterPainScore
+                  ),
+                  label: `S${session.sessionNumber} After`,
+                  sessionNumber:
+                    session.sessionNumber,
+                  type: "after",
+                });
+
+              });
+
+              const chartWidth = 900;
+              const chartHeight = 380;
+
+              const left = 70;
+              const right = 40;
+              const top = 40;
+              const bottom = 80;
+
+              const graphWidth =
+                chartWidth - left - right;
+
+              const graphHeight =
+                chartHeight - top - bottom;
+
+              const getX = (index) => {
+
+                if (graphPoints.length === 1) {
+                  return left + graphWidth / 2;
+                }
+
+                return (
+                  left +
+                  (index /
+                    (graphPoints.length - 1)) *
+                    graphWidth
+                );
+              };
+
+              const getY = (value) => {
+
+                return (
+                  top +
+                  graphHeight -
+                  (value / 10) *
+                    graphHeight
+                );
+              };
+
+              /* ONE CONNECTED LINE */
+
+              const connectedPoints =
+                graphPoints
+                  .map(
+                    (point, index) =>
+                      `${getX(index)},${getY(
+                        point.value
+                      )}`
+                  )
+                  .join(" ");
+
+              return (
+                <div
+                  key={patient.id}
+                  style={{
+                    marginBottom: "50px",
+                  }}
+                >
+
+                  {/* PATIENT HEADER */}
 
                   <div
                     className="patient-card"
-                    key={session.id}
+                    style={{
+                      marginBottom: "20px",
+                    }}
                   >
 
                     <div className="patient-avatar">
-                      📊
+                      👤
                     </div>
 
                     <div className="patient-details">
@@ -1734,98 +1747,460 @@ function App() {
                       <div className="patient-title">
 
                         <h3>
-                          {session.patientName}
+                          {patient.name}
                         </h3>
 
                         <span className="patient-id">
-                          {session.id}
+                          {patient.id}
+                        </span>
+
+                      </div>
+
+                      <div className="patient-info">
+
+                        <span>
+                          Age: {patient.age}
+                        </span>
+
+                        <span>
+                          Gender: {patient.gender}
+                        </span>
+
+                        <span>
+                          Diagnosis: {patient.diagnosis}
                         </span>
 
                       </div>
 
                       <p>
                         <strong>
-                          Date:
+                          Total Sessions:
                         </strong>{" "}
-                        {session.date}
+                        {patientSessions.length}
                       </p>
-
-                      <p>
-                        <strong>
-                          Before Treatment:
-                        </strong>{" "}
-                        {session.beforePainScore}/10
-                      </p>
-
-                      <p>
-                        <strong>
-                          After Treatment:
-                        </strong>{" "}
-                        {session.afterPainScore}/10
-                      </p>
-
-                      <p>
-                        <strong>
-                          Carrier Frequency:
-                        </strong>{" "}
-                        {session.carrierFrequency} Hz
-                      </p>
-
-                      <p>
-                        <strong>
-                          Beat Frequency:
-                        </strong>{" "}
-                        {session.beatFrequency} Hz
-                      </p>
-
-                      <p>
-                        <strong>
-                          Intensity:
-                        </strong>{" "}
-                        {session.intensity} mA
-                      </p>
-
-                      <p>
-                        <strong>
-                          Duration:
-                        </strong>{" "}
-                        {session.duration} minutes
-                      </p>
-
-                      <p>
-                        <strong>
-                          Source:
-                        </strong>{" "}
-                        {session.recommendationMode ===
-                        "ai"
-                          ? "AI Recommendation"
-                          : "Manual Entry"}
-                      </p>
-
-                      <p>
-                        <strong>
-                          Session Status:
-                        </strong>{" "}
-                        {session.status}
-                      </p>
-
-                      {session.notes && (
-                        <p>
-                          <strong>
-                            Notes:
-                          </strong>{" "}
-                          {session.notes}
-                        </p>
-                      )}
 
                     </div>
 
                   </div>
 
-                )
-              )}
+                  {/* CONTINUOUS GRAPH */}
 
-            </div>
+                  <div
+                    style={{
+                      background: "#ffffff",
+                      borderRadius: "16px",
+                      padding: "20px",
+                      marginBottom: "25px",
+                      border: "1px solid #e2e8f0",
+                      boxShadow:
+                        "0 5px 20px rgba(15,23,42,0.06)",
+                    }}
+                  >
+
+                    <h3>
+                      📈 Pain Score Progress
+                    </h3>
+
+                    <p
+                      style={{
+                        color: "#64748b",
+                      }}
+                    >
+                      Continuous pain-score trend across
+                      all treatment sessions.
+                    </p>
+
+                    <div
+                      style={{
+                        width: "100%",
+                        overflowX: "auto",
+                      }}
+                    >
+
+                      <svg
+                        viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                        width="100%"
+                        height="380"
+                        style={{
+                          minWidth:
+                            graphPoints.length > 6
+                              ? "800px"
+                              : "600px",
+                        }}
+                      >
+
+                        {/* GRID */}
+
+                        {[0, 2, 4, 6, 8, 10].map(
+                          (value) => {
+
+                            const y =
+                              getY(value);
+
+                            return (
+                              <g key={value}>
+
+                                <line
+                                  x1={left}
+                                  y1={y}
+                                  x2={
+                                    chartWidth -
+                                    right
+                                  }
+                                  y2={y}
+                                  stroke="#e2e8f0"
+                                  strokeWidth="1"
+                                />
+
+                                <text
+                                  x={left - 15}
+                                  y={y + 5}
+                                  textAnchor="end"
+                                  fontSize="12"
+                                  fill="#64748b"
+                                >
+                                  {value}
+                                </text>
+
+                              </g>
+                            );
+                          }
+                        )}
+
+                        {/* Y AXIS */}
+
+                        <line
+                          x1={left}
+                          y1={top}
+                          x2={left}
+                          y2={
+                            chartHeight -
+                            bottom
+                          }
+                          stroke="#94a3b8"
+                          strokeWidth="2"
+                        />
+
+                        {/* X AXIS */}
+
+                        <line
+                          x1={left}
+                          y1={
+                            chartHeight -
+                            bottom
+                          }
+                          x2={
+                            chartWidth -
+                            right
+                          }
+                          y2={
+                            chartHeight -
+                            bottom
+                          }
+                          stroke="#94a3b8"
+                          strokeWidth="2"
+                        />
+
+                        {/* =================================
+                            ONE CONTINUOUS LINE
+                        ================================= */}
+
+                        <polyline
+                          points={connectedPoints}
+                          fill="none"
+                          stroke="#2563eb"
+                          strokeWidth="4"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+
+                        {/* GRAPH POINTS */}
+
+                        {graphPoints.map(
+                          (point, index) => {
+
+                            const x =
+                              getX(index);
+
+                            const y =
+                              getY(point.value);
+
+                            const isBefore =
+                              point.type ===
+                              "before";
+
+                            return (
+                              <g
+                                key={`${point.sessionNumber}-${point.type}`}
+                              >
+
+                                {/* POINT */}
+
+                                <circle
+                                  cx={x}
+                                  cy={y}
+                                  r="7"
+                                  fill={
+                                    isBefore
+                                      ? "#2563eb"
+                                      : "#16a34a"
+                                  }
+                                  stroke="#ffffff"
+                                  strokeWidth="3"
+                                />
+
+                                {/* VALUE */}
+
+                                <text
+                                  x={x}
+                                  y={
+                                    isBefore
+                                      ? y - 14
+                                      : y + 25
+                                  }
+                                  textAnchor="middle"
+                                  fontSize="12"
+                                  fontWeight="700"
+                                  fill={
+                                    isBefore
+                                      ? "#2563eb"
+                                      : "#16a34a"
+                                  }
+                                >
+                                  {point.value}
+                                </text>
+
+                                {/* SESSION LABEL */}
+
+                                <text
+                                  x={x}
+                                  y={
+                                    chartHeight -
+                                    42
+                                  }
+                                  textAnchor="middle"
+                                  fontSize="11"
+                                  fontWeight="700"
+                                  fill="#334155"
+                                >
+                                  Session{" "}
+                                  {
+                                    point.sessionNumber
+                                  }
+                                </text>
+
+                                {/* BEFORE / AFTER */}
+
+                                <text
+                                  x={x}
+                                  y={
+                                    chartHeight -
+                                    25
+                                  }
+                                  textAnchor="middle"
+                                  fontSize="10"
+                                  fill="#64748b"
+                                >
+                                  {isBefore
+                                    ? "Before"
+                                    : "After"}
+                                </text>
+
+                              </g>
+                            );
+                          }
+                        )}
+
+                      </svg>
+
+                    </div>
+
+                    {/* LEGEND */}
+
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "center",
+                        gap: "30px",
+                        flexWrap: "wrap",
+                        marginTop: "10px",
+                      }}
+                    >
+
+                      <span>
+
+                        <span
+                          style={{
+                            display:
+                              "inline-block",
+                            width: "14px",
+                            height: "14px",
+                            borderRadius:
+                              "50%",
+                            background:
+                              "#2563eb",
+                            marginRight:
+                              "7px",
+                          }}
+                        />
+
+                        Before Treatment
+
+                      </span>
+
+                      <span>
+
+                        <span
+                          style={{
+                            display:
+                              "inline-block",
+                            width: "14px",
+                            height: "14px",
+                            borderRadius:
+                              "50%",
+                            background:
+                              "#16a34a",
+                            marginRight:
+                              "7px",
+                          }}
+                        />
+
+                        After Treatment
+
+                      </span>
+
+                    </div>
+
+                  </div>
+
+                  {/* SESSION CARDS */}
+
+                  {patientSessions.map(
+                    (session) => (
+
+                      <div
+                        className="patient-card"
+                        key={session.id}
+                        style={{
+                          marginBottom: "15px",
+                          borderLeft:
+                            "4px solid #2563eb",
+                        }}
+                      >
+
+                        <div className="patient-avatar">
+                          📊
+                        </div>
+
+                        <div className="patient-details">
+
+                          <div className="patient-title">
+
+                            <h3>
+                              Session{" "}
+                              {
+                                session.sessionNumber
+                              }
+                            </h3>
+
+                            <span className="patient-id">
+                              {session.id}
+                            </span>
+
+                          </div>
+
+                          <p>
+                            <strong>
+                              Date:
+                            </strong>{" "}
+                            {session.date}
+                          </p>
+
+                          <p>
+                            <strong>
+                              Before Treatment:
+                            </strong>{" "}
+                            {session.beforePainScore}/10
+                          </p>
+
+                          <p>
+                            <strong>
+                              After Treatment:
+                            </strong>{" "}
+                            {session.afterPainScore}/10
+                          </p>
+
+                          <p>
+                            <strong>
+                              Carrier Frequency:
+                            </strong>{" "}
+                            {session.carrierFrequency} Hz
+                          </p>
+
+                          <p>
+                            <strong>
+                              Beat Frequency:
+                            </strong>{" "}
+                            {session.beatFrequency} Hz
+                          </p>
+
+                          <p>
+                            <strong>
+                              Intensity:
+                            </strong>{" "}
+                            {session.intensity} mA
+                          </p>
+
+                          <p>
+                            <strong>
+                              Duration:
+                            </strong>{" "}
+                            {session.duration} minutes
+                          </p>
+
+                          <p>
+                            <strong>
+                              Session Time:
+                            </strong>{" "}
+                            {session.sessionTime}
+                          </p>
+
+                          <p>
+                            <strong>
+                              Source:
+                            </strong>{" "}
+                            {session.recommendationMode ===
+                            "ai"
+                              ? "AI Recommendation"
+                              : "Manual Entry"}
+                          </p>
+
+                          <p>
+                            <strong>
+                              Status:
+                            </strong>{" "}
+                            {session.status}
+                          </p>
+
+                          {session.notes && (
+                            <p>
+                              <strong>
+                                Notes:
+                              </strong>{" "}
+                              {session.notes}
+                            </p>
+                          )}
+
+                        </div>
+
+                      </div>
+
+                    )
+                  )}
+
+                </div>
+              );
+            })
 
           )}
 
@@ -1836,7 +2211,7 @@ function App() {
   }
 
   /* =====================================================
-     PATIENTS
+     PATIENTS PAGE
   ===================================================== */
 
   if (page === "patients") {
@@ -1846,15 +2221,8 @@ function App() {
         <header className="dashboard-header">
 
           <div>
-
-            <h1>
-              Smart IFT
-            </h1>
-
-            <p>
-              Patients
-            </p>
-
+            <h1>Smart IFT</h1>
+            <p>Patients</p>
           </div>
 
           <button
@@ -1877,13 +2245,10 @@ function App() {
             ← Back to Dashboard
           </button>
 
-          <h2>
-            Patients
-          </h2>
+          <h2>Patients</h2>
 
           <p>
-            Manage your patients and their treatment
-            sessions.
+            Manage your patients and treatment sessions.
           </p>
 
         </section>
@@ -1894,15 +2259,11 @@ function App() {
 
             <div>
 
-              <h2>
-                Patient List
-              </h2>
+              <h2>Patient List</h2>
 
               <p>
                 {patients.length} patient
-                {patients.length !== 1
-                  ? "s"
-                  : ""}
+                {patients.length !== 1 ? "s" : ""}
               </p>
 
             </div>
@@ -2029,7 +2390,7 @@ function App() {
   }
 
   /* =====================================================
-     ADD PATIENT
+     ADD PATIENT PAGE
   ===================================================== */
 
   if (page === "add-patient") {
@@ -2039,15 +2400,8 @@ function App() {
         <header className="dashboard-header">
 
           <div>
-
-            <h1>
-              Smart IFT
-            </h1>
-
-            <p>
-              Add Patient
-            </p>
-
+            <h1>Smart IFT</h1>
+            <p>Add Patient</p>
           </div>
 
           <button
@@ -2070,9 +2424,7 @@ function App() {
             ← Back to Patients
           </button>
 
-          <h2>
-            Add New Patient
-          </h2>
+          <h2>Add New Patient</h2>
 
           <p>
             Enter the patient's details.
@@ -2118,9 +2470,7 @@ function App() {
                 type="text"
                 name="name"
                 value={patientForm.name}
-                onChange={
-                  handlePatientChange
-                }
+                onChange={handlePatientChange}
                 placeholder="Enter patient name"
                 required
               />
@@ -2137,9 +2487,7 @@ function App() {
                 type="number"
                 name="age"
                 value={patientForm.age}
-                onChange={
-                  handlePatientChange
-                }
+                onChange={handlePatientChange}
                 placeholder="Enter age"
                 required
               />
@@ -2154,12 +2502,8 @@ function App() {
 
               <select
                 name="gender"
-                value={
-                  patientForm.gender
-                }
-                onChange={
-                  handlePatientChange
-                }
+                value={patientForm.gender}
+                onChange={handlePatientChange}
                 required
               >
 
@@ -2192,12 +2536,8 @@ function App() {
               <input
                 type="tel"
                 name="phone"
-                value={
-                  patientForm.phone
-                }
-                onChange={
-                  handlePatientChange
-                }
+                value={patientForm.phone}
+                onChange={handlePatientChange}
                 placeholder="Enter phone number"
                 required
               />
@@ -2213,12 +2553,8 @@ function App() {
               <input
                 type="text"
                 name="diagnosis"
-                value={
-                  patientForm.diagnosis
-                }
-                onChange={
-                  handlePatientChange
-                }
+                value={patientForm.diagnosis}
+                onChange={handlePatientChange}
                 placeholder="Enter diagnosis"
                 required
               />
@@ -2234,12 +2570,8 @@ function App() {
               <input
                 type="number"
                 name="painScore"
-                value={
-                  patientForm.painScore
-                }
-                onChange={
-                  handlePatientChange
-                }
+                value={patientForm.painScore}
+                onChange={handlePatientChange}
                 placeholder="Enter score"
                 min="0"
                 max="10"
@@ -2256,12 +2588,8 @@ function App() {
 
               <textarea
                 name="notes"
-                value={
-                  patientForm.notes
-                }
-                onChange={
-                  handlePatientChange
-                }
+                value={patientForm.notes}
+                onChange={handlePatientChange}
                 placeholder="Additional notes..."
                 rows="4"
               />
@@ -2354,10 +2682,8 @@ function App() {
 
         <p>
           Welcome,{" "}
-          <strong>
-            {username}
-          </strong>
-          . Manage your patients and treatment sessions.
+          <strong>{username}</strong>.
+          Manage your patients and treatment sessions.
         </p>
 
       </section>
@@ -2423,7 +2749,8 @@ function App() {
           </h3>
 
           <p>
-            View every previous treatment session.
+            View every previous treatment session and
+            pain-score progress.
           </p>
 
           <button
