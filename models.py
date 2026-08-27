@@ -3,6 +3,10 @@ from database import Base
 from datetime import datetime
 
 
+# ==================================================
+# USER
+# ==================================================
+
 class User(Base):
 
     __tablename__ = "users"
@@ -30,6 +34,10 @@ class User(Base):
         nullable=False
     )
 
+
+# ==================================================
+# PATIENT
+# ==================================================
 
 class Patient(Base):
 
@@ -63,6 +71,30 @@ class Patient(Base):
         nullable=True
     )
 
+    phone = Column(
+        String,
+        nullable=True
+    )
+
+    diagnosis = Column(
+        String,
+        nullable=True
+    )
+
+    pain_score = Column(
+        Integer,
+        nullable=True
+    )
+
+    notes = Column(
+        String,
+        nullable=True
+    )
+
+
+# ==================================================
+# IFT TREATMENT SESSION
+# ==================================================
 
 class Session(Base):
 
@@ -86,6 +118,10 @@ class Session(Base):
         nullable=False
     )
 
+    # ----------------------------------------------
+    # Patient condition
+    # ----------------------------------------------
+
     condition = Column(
         String,
         nullable=True
@@ -95,6 +131,10 @@ class Session(Base):
         String,
         nullable=True
     )
+
+    # ----------------------------------------------
+    # Pain scores
+    # ----------------------------------------------
 
     pain_before = Column(
         Integer,
@@ -106,7 +146,16 @@ class Session(Base):
         nullable=True
     )
 
-    frequency = Column(
+    # ----------------------------------------------
+    # IFT Parameters
+    # ----------------------------------------------
+
+    carrier_frequency = Column(
+        Integer,
+        nullable=True
+    )
+
+    beat_frequency = Column(
         Integer,
         nullable=True
     )
@@ -119,7 +168,21 @@ class Session(Base):
     duration = Column(
         Integer,
         nullable=True
-    )    
+    )
+
+    # ----------------------------------------------
+    # Therapist notes
+    # ----------------------------------------------
+
+    notes = Column(
+        String,
+        nullable=True
+    )
+
+    # ----------------------------------------------
+    # Uploaded medical report
+    # ----------------------------------------------
+
     report_filename = Column(
         String,
         nullable=True
