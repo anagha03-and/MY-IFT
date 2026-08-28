@@ -1,12 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import "./App.css";
-import {
-  createPatient,
-  getPatients,
-  createSession,
-  getSessions,
-} from "./api";
-const EMPTY_PATIENT_FORM = {
+
+/* =========================================================
+   STORAGE
+========================================================= */
+
+const USERS_KEY = "smartIFT_users";
+const LOGIN_KEY = "smartIFT_loggedInUser";
+
+const EMPTY_PATIENT = {
   name: "",
   age: "",
   gender: "",
@@ -17,567 +19,435 @@ const EMPTY_PATIENT_FORM = {
 };
 
 const EMPTY_PARAMETERS = {
-  carrierFrequency: "",
-  beatFrequency: "",
-  intensity: "",
-  duration: "",
+  carrierFrequency: "4000",
+  beatFrequency: "100",
+  intensity: "10",
+  duration: "15",
   notes: "",
 };
 
+/* =========================================================
+   HELPERS
+========================================================= */
+
+function getUsers() {
+  try {
+    return JSON.parse(localStorage.getItem(USERS_KEY)) || {};
+  } catch {
+    return {};
+  }
+}
+
+function saveUsers(users) {
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+}
+
+function getInitials(name = "") {
+  const parts = name.trim().split(" ").filter(Boolean);
+
+  if (!parts.length) return "U";
+
+  if (parts.length === 1) {
+    return parts[0].substring(0, 2).toUpperCase();
+  }
+
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+}
+
+function generatePatientId() {
+  return `P-${Date.now().toString().slice(-10)}`;
+}
+
+function formatDate(date) {
+  if (!date) return "-";
+
+  return new Date(date).toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+function formatTime(date) {
+  if (!date) return "-";
+
+  return new Date(date).toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatDuration(seconds) {
+  const mins = Math.floor(seconds / 60);
+  const secs = seconds % 60;
+
+  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(
+    2,
+    "0"
+  )}`;
+}
+
+/* =========================================================
+   APP
+========================================================= */
+
 function App() {
-  /* =====================================================
-     LOGIN
-  ===================================================== */
-
-  const [loggedIn, setLoggedIn] = useState(() => {
-    return localStorage.getItem("smartIFT_loggedIn") === "true";
-  });
-
-  const [username, setUsername] = useState(() => {
-    return localStorage.getItem("smartIFT_username") || "";
-  });
+  const [loggedInUser, setLoggedInUser] = useState(
+    localStorage.getItem(LOGIN_KEY) || ""
+  );
 
   const [page, setPage] = useState("dashboard");
 
-  const [showUserMenu, setShowUserMenu] = useState(false);
+  const [usersData, setUsersData] = useState(getUsers());
 
-  /* =====================================================
-     USERS DATA
-  ===================================================== */
+  const [patientForm, setPatientForm] = useState(EMPTY_PATIENT);
 
-  const [usersData, setUsersData] = useState(() => {
-    try {
-      const saved = localStorage.getItem("smartIFT_users");
-      return saved ? JSON.parse(saved) : {};
-    } catch {
-      return {};
-    }
-  });
+  const [patients, setPatients] = useState([]);
 
-  const currentUserData = usersData[username] || {
-    patients: [],
-    sessions: [],
-  };
+  const [sessions, setSessions] = useState([]);
 
-  const patients = currentUserData.patients || [];
-  const sessionHistory = currentUserData.sessions || [];
-
-  /* =====================================================
-     SELECTED PATIENT
-  ===================================================== */
-
-  const [selectedPatient, setSelectedPatient] = useState(null);
-
-  /* =====================================================
-     PATIENT FORM
-  ===================================================== */
-
-  const [patientForm, setPatientForm] =
-    useState(EMPTY_PATIENT_FORM);
-
-  /* =====================================================
-     TREATMENT
-  ===================================================== */
+  const [selectedPatientId, setSelectedPatientId] = useState("");
 
   const [treatmentParameters, setTreatmentParameters] =
     useState(EMPTY_PARAMETERS);
 
-  const [aiRecommendation, setAiRecommendation] =
-    useState(null);
+  const [aiRecommendation, setAiRecommendation] = useState(null);
 
-  const [recommendationMode, setRecommendationMode] =
-    useState("manual");
+  const [xrayFile, setXrayFile] = useState(null);
+  const [reportFile, setReportFile] = useState(null);
+
+  const [xrayPreview, setXrayPreview] = useState("");
+  const [reportPreview, setReportPreview] = useState("");
+
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [showSafetyWarning, setShowSafetyWarning] = useState(false);
+
+  const [sessionStatus, setSessionStatus] = useState("idle");
+  const [sessionSeconds, setSessionSeconds] = useState(0);
+  const [afterPainScore, setAfterPainScore] = useState("");
 
   const [machineSent, setMachineSent] = useState(false);
 
-  /* =====================================================
-     SESSION
-  ===================================================== */
-
-  const [sessionStatus, setSessionStatus] =
-    useState("not-started");
-
-  const [sessionSeconds, setSessionSeconds] =
-    useState(0);
-
-  const [afterPainScore, setAfterPainScore] =
-    useState("");
-
-  /* =====================================================
-     POPUPS
-  ===================================================== */
-
-  const [showSafetyWarning, setShowSafetyWarning] =
-    useState(false);
-
-  const [showAfterTreatmentPopup, setShowAfterTreatmentPopup] =
-    useState(false);
-
-  /* =====================================================
-     SAVE USERS DATA
-  ===================================================== */
+  /* =========================================================
+     LOAD USER DATA
+  ========================================================= */
 
   useEffect(() => {
-    localStorage.setItem(
-      "smartIFT_users",
-      JSON.stringify(usersData)
-    );
-  }, [usersData]);
+    if (!loggedInUser) return;
 
-  /* =====================================================
-     SAVE LOGIN
-  ===================================================== */
+    const users = getUsers();
 
-  useEffect(() => {
-    if (loggedIn && username) {
-      localStorage.setItem("smartIFT_loggedIn", "true");
-      localStorage.setItem("smartIFT_username", username);
+    if (!users[loggedInUser]) {
+      users[loggedInUser] = {
+        patients: [],
+        sessions: [],
+      };
+
+      saveUsers(users);
     }
-  }, [loggedIn, username]);
 
-  /* =====================================================
-     TIMER
-  ===================================================== */
+    setUsersData(users);
+    setPatients(users[loggedInUser].patients || []);
+    setSessions(users[loggedInUser].sessions || []);
+  }, [loggedInUser]);
 
-  useEffect(() => {
-    if (sessionStatus !== "running") {
+  /* =========================================================
+     SAVE USER DATA
+  ========================================================= */
+
+  const updateUserData = (newPatients, newSessions) => {
+    if (!loggedInUser) return;
+
+    const users = getUsers();
+
+    users[loggedInUser] = {
+      patients: newPatients,
+      sessions: newSessions,
+    };
+
+    saveUsers(users);
+
+    setUsersData(users);
+    setPatients(newPatients);
+    setSessions(newSessions);
+  };
+
+  /* =========================================================
+     SELECTED PATIENT
+  ========================================================= */
+
+  const selectedPatient = useMemo(
+    () =>
+      patients.find(
+        (patient) => patient.id === selectedPatientId
+      ) || null,
+    [patients, selectedPatientId]
+  );
+
+  /* =========================================================
+     LOGIN
+  ========================================================= */
+
+  const handleLogin = (username, password) => {
+    if (!username.trim() || !password.trim()) {
+      alert("Please enter username and password.");
       return;
     }
 
-    const timer = setInterval(() => {
-      setSessionSeconds((previous) => previous + 1);
-    }, 1000);
+    const cleanUsername = username.trim();
 
-    return () => clearInterval(timer);
-  }, [sessionStatus]);
+    const users = getUsers();
 
-  /* =====================================================
-     AUTOMATIC COMPLETION
-  ===================================================== */
+    if (!users[cleanUsername]) {
+      users[cleanUsername] = {
+        patients: [],
+        sessions: [],
+      };
 
-  useEffect(() => {
-    if (
-      sessionStatus === "running" &&
-      treatmentParameters.duration !== "" &&
-      Number(treatmentParameters.duration) > 0
-    ) {
-      const durationSeconds =
-        Number(treatmentParameters.duration) * 60;
-
-      if (sessionSeconds >= durationSeconds) {
-        setSessionStatus("completed");
-        setShowAfterTreatmentPopup(true);
-      }
+      saveUsers(users);
     }
-  }, [
-    sessionSeconds,
-    sessionStatus,
-    treatmentParameters.duration,
-  ]);
-  
-/* =====================================================
-   LOAD PATIENT SESSIONS FROM BACKEND
-===================================================== */
 
-useEffect(() => {
-  const loadPatientSessions = async () => {
-    if (!selectedPatient?.id) {
+    localStorage.setItem(LOGIN_KEY, cleanUsername);
+
+    setLoggedInUser(cleanUsername);
+    setUsersData(users);
+    setPatients(users[cleanUsername].patients || []);
+    setSessions(users[cleanUsername].sessions || []);
+    setPage("dashboard");
+  };
+
+  /* =========================================================
+     LOGOUT
+  ========================================================= */
+
+  const handleLogout = () => {
+    localStorage.removeItem(LOGIN_KEY);
+
+    setLoggedInUser("");
+    setPage("dashboard");
+    setShowProfileMenu(false);
+    setShowSettings(false);
+  };
+
+  /* =========================================================
+     ADD PATIENT
+  ========================================================= */
+
+  const handleAddPatient = (e) => {
+    e.preventDefault();
+
+    if (!patientForm.name.trim()) {
+      alert("Please enter the patient's name.");
       return;
     }
 
-    try {
-      const backendSessions = await getSessions(
-        selectedPatient.id
-      );
-
-      console.log(
-        "Sessions loaded from backend:",
-        backendSessions
-      );
-
-      const formattedSessions =
-        backendSessions.map((session, index) => ({
-          id: `S${String(session.id).padStart(3, "0")}`,
-
-          sessionNumber: index + 1,
-
-          username,
-
-          patientId: session.patient_id,
-
-          patientName: selectedPatient.name,
-
-          date: session.date,
-
-          beforePainScore: session.pain_before,
-
-          afterPainScore: session.pain_after,
-
-          carrierFrequency:
-            session.carrier_frequency,
-
-          beatFrequency:
-            session.beat_frequency,
-
-          intensity: session.intensity,
-
-          duration: session.duration,
-
-          notes: session.notes || "",
-
-          recommendationMode: "Backend",
-
-          status: "completed",
-
-          sessionTime: "",
-        }));
-
-      /*
-       * Keep sessions belonging to other patients.
-       * Replace only this patient's sessions.
-       */
-
-      const otherPatientSessions =
-        sessionHistory.filter(
-          (session) =>
-            session.patientId !== selectedPatient.id
-        );
-
-      updateCurrentUserData({
-        sessions: [
-          ...otherPatientSessions,
-          ...formattedSessions,
-        ],
-      });
-
-      console.log(
-        "Sessions updated in frontend:",
-        formattedSessions
-      );
-
-    } catch (error) {
-      console.error(
-        "Could not load sessions:",
-        error
-      );
-    }
-  };
-
-  loadPatientSessions();
-
-}, [selectedPatient?.id]);
-```
-
-
-
-  /* =====================================================
-     YOUR NEXT EXISTING CODE
-  ===================================================== */
-    /* =====================================================
-     LOAD PATIENTS FROM BACKEND
-  ===================================================== */
-
-  ```js
-/* =====================================================
-   LOAD PATIENTS FROM BACKEND
-===================================================== */
-
-useEffect(() => {
-  const loadPatients = async () => {
-    if (!loggedIn || !username) {
+    if (!patientForm.age) {
+      alert("Please enter the patient's age.");
       return;
     }
 
-    try {
-      const backendPatients = await getPatients();
-
-      console.log(
-        "Patients loaded from backend:",
-        backendPatients
-      );
-
-      const formattedPatients = backendPatients.map(
-        (patient) => {
-          const existingPatient = patients.find(
-            (p) => p.id === patient.patient_id
-          );
-
-          return {
-            id: patient.patient_id,
-            username: username,
-            name: patient.name,
-            age: patient.age,
-            gender: patient.gender,
-
-            // Keep existing frontend information
-            phone:
-              existingPatient?.phone || "",
-            diagnosis:
-              existingPatient?.diagnosis || "",
-            painScore:
-              existingPatient?.painScore ?? "",
-            notes:
-              existingPatient?.notes || "",
-          };
-        }
-      );
-
-      updateCurrentUserData({
-        patients: formattedPatients,
-      });
-
-    } catch (error) {
-      console.error(
-        "Error loading patients from backend:",
-        error
-      );
-    }
-  };
-
-  loadPatients();
-}, [loggedIn, username]);
-
-  /* =====================================================
-     TIME FORMAT
-  ===================================================== */
-
-  const formatTime = (seconds) => {
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-
-    return `${String(minutes).padStart(2, "0")}:${String(
-      remainingSeconds
-    ).padStart(2, "0")}`;
-  };
-
-  /* =====================================================
-     UPDATE USER DATA
-  ===================================================== */
-
-  const updateCurrentUserData = (newData) => {
-    setUsersData((previous) => ({
-      ...previous,
-
-      [username]: {
-        patients:
-          newData.patients !== undefined
-            ? newData.patients
-            : previous[username]?.patients || [],
-
-        sessions:
-          newData.sessions !== undefined
-            ? newData.sessions
-            : previous[username]?.sessions || [],
-      },
-    }));
-  };
-
-  /* =====================================================
-     PATIENT FORM
-  ===================================================== */
-
-  const handlePatientChange = (e) => {
-    const { name, value } = e.target;
-
-    setPatientForm((previous) => ({
-      ...previous,
-      [name]: value,
-    }));
-  };
-
-  /* =====================================================
-    const addPatient = async (e) => {
-  e.preventDefault();
-
-  if (!username) {
-    alert("Please login first.");
-    return;
-  }
-
-  try {
     const newPatient = {
-      patient_id: `P${String(patients.length + 1).padStart(3, "0")}`,
-      name: patientForm.name,
-      age: Number(patientForm.age),
-      gender: patientForm.gender,
-      phone: patientForm.phone,
-      diagnosis: patientForm.diagnosis,
-      pain_score:
-        patientForm.painScore === ""
-          ? null
-          : Number(patientForm.painScore),
-      notes: patientForm.notes,
+      ...patientForm,
+      id: generatePatientId(),
+      createdAt: new Date().toISOString(),
     };
 
-    // Send patient to FastAPI backend
-    const savedPatient = await createPatient(newPatient);
+    const updatedPatients = [...patients, newPatient];
 
-    console.log(
-      "Patient saved to backend:",
-      savedPatient
-    );
+    updateUserData(updatedPatients, sessions);
 
-    // Keep frontend state updated
-    const frontendPatient = {
-      id: savedPatient.patient_id,
-      username,
-      name: savedPatient.name,
-      age: savedPatient.age,
-      gender: savedPatient.gender,
-      phone: savedPatient.phone,
-      diagnosis: savedPatient.diagnosis,
-      painScore: savedPatient.pain_score,
-      notes: savedPatient.notes,
-      createdAt: new Date().toLocaleString(),
-    };
+    setPatientForm(EMPTY_PATIENT);
 
-    updateCurrentUserData({
-      patients: [...patients, frontendPatient],
-    });
-
-    setPatientForm(EMPTY_PATIENT_FORM);
-
-    setPage("patients");
-
-    alert("Patient added successfully!");
-
-  } catch (error) {
-    console.error(
-      "Error creating patient:",
-      error
-    );
-
-    alert(
-      `Could not save patient: ${error.message}`
-    );
-  }
-};
-
-  /* =====================================================
-     OPEN TREATMENT
-  ===================================================== */
-
-  const openTreatment = (patient) => {
-    setSelectedPatient(patient);
-
-    setTreatmentParameters({
-      ...EMPTY_PARAMETERS,
-    });
-
-    setAiRecommendation(null);
-    setRecommendationMode("manual");
-    setMachineSent(false);
-    setSessionStatus("not-started");
-    setSessionSeconds(0);
-    setAfterPainScore("");
-    setShowAfterTreatmentPopup(false);
-
-    setPage("treatment");
+    alert("Patient added successfully.");
   };
 
-  /* =====================================================
-     TREATMENT CHANGE
-  ===================================================== */
+  /* =========================================================
+     DELETE PATIENT
+  ========================================================= */
 
-  const handleTreatmentChange = (e) => {
-    const { name, value } = e.target;
+  const handleDeletePatient = (patientId) => {
+    const patient = patients.find(
+      (p) => p.id === patientId
+    );
 
-    setTreatmentParameters((previous) => ({
-      ...previous,
-      [name]: value,
-    }));
+    if (!patient) return;
+
+    const confirmed = window.confirm(
+      `Remove ${patient.name} from the patient list?\n\nExisting session history will also be removed.`
+    );
+
+    if (!confirmed) return;
+
+    const updatedPatients = patients.filter(
+      (p) => p.id !== patientId
+    );
+
+    const updatedSessions = sessions.filter(
+      (session) => session.patientId !== patientId
+    );
+
+    updateUserData(updatedPatients, updatedSessions);
+
+    if (selectedPatientId === patientId) {
+      setSelectedPatientId("");
+    }
   };
 
-  /* =====================================================
+  /* =========================================================
+     FILE UPLOAD
+  ========================================================= */
+
+  const handleXrayUpload = (e) => {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    setXrayFile(file);
+
+    if (file.type.startsWith("image/")) {
+      setXrayPreview(URL.createObjectURL(file));
+    } else {
+      setXrayPreview("");
+    }
+  };
+
+  const handleReportUpload = (e) => {
+    const file = e.target.files?.[0];
+
+    if (!file) return;
+
+    setReportFile(file);
+
+    if (file.type.startsWith("image/")) {
+      setReportPreview(URL.createObjectURL(file));
+    } else {
+      setReportPreview("");
+    }
+  };
+
+  /* =========================================================
      AI RECOMMENDATION
-  ===================================================== */
+  ========================================================= */
 
   const generateAIRecommendation = () => {
-    if (!selectedPatient) return;
+    if (!selectedPatient) {
+      alert("Please select a patient first.");
+      return;
+    }
 
-    const pain = Number(selectedPatient.painScore);
+    const pain = Number(
+      selectedPatient.painScore || 0
+    );
 
     let recommendation;
 
     if (pain >= 7) {
       recommendation = {
         carrierFrequency: "4000",
-        beatFrequency: "80",
-        intensity: "15",
+        beatFrequency: "100",
+        intensity: "10",
         duration: "15",
+        reason:
+          "Recommendation generated using the patient's recorded pain score.",
       };
     } else if (pain >= 4) {
       recommendation = {
         carrierFrequency: "4000",
-        beatFrequency: "100",
-        intensity: "12",
+        beatFrequency: "90",
+        intensity: "8",
         duration: "15",
+        reason:
+          "Recommendation generated using the patient's recorded pain score.",
       };
     } else {
       recommendation = {
         carrierFrequency: "4000",
-        beatFrequency: "120",
-        intensity: "10",
+        beatFrequency: "80",
+        intensity: "6",
         duration: "10",
+        reason:
+          "Recommendation generated using the patient's recorded pain score.",
       };
     }
 
     setAiRecommendation(recommendation);
+
+    setTreatmentParameters({
+      carrierFrequency:
+        recommendation.carrierFrequency,
+
+      beatFrequency:
+        recommendation.beatFrequency,
+
+      intensity:
+        recommendation.intensity,
+
+      duration:
+        recommendation.duration,
+
+      notes: "",
+    });
   };
 
-  /* =====================================================
-     APPLY AI
-  ===================================================== */
+  /* =========================================================
+     APPLY AI RECOMMENDATION
+  ========================================================= */
 
   const applyAIRecommendation = () => {
     if (!aiRecommendation) return;
 
-    setTreatmentParameters((previous) => ({
-      ...previous,
+    setTreatmentParameters({
       carrierFrequency:
         aiRecommendation.carrierFrequency,
+
       beatFrequency:
         aiRecommendation.beatFrequency,
+
       intensity:
         aiRecommendation.intensity,
+
       duration:
         aiRecommendation.duration,
-    }));
 
-    setRecommendationMode("ai");
+      notes: "",
+    });
   };
 
-  /* =====================================================
-     SEND TO MACHINE
-  ===================================================== */
+  /* =========================================================
+     SEND PARAMETERS
+  ========================================================= */
 
-  const sendToMachine = () => {
+  const sendParametersToMachine = () => {
+    if (!selectedPatient) {
+      alert("Please select a patient.");
+      return;
+    }
+
     if (
       !treatmentParameters.carrierFrequency ||
       !treatmentParameters.beatFrequency ||
       !treatmentParameters.intensity ||
       !treatmentParameters.duration
     ) {
-      alert("Please enter all treatment parameters first.");
+      alert("Please complete all treatment parameters.");
       return;
     }
 
     setMachineSent(true);
 
     alert(
-      "Treatment parameters are ready to be sent to the IFT machine.\n\nESP32/backend integration can be connected later."
+      "Treatment parameters prepared for the machine.\n\nESP32/backend communication can be connected later."
     );
   };
 
-  /* =====================================================
+  /* =========================================================
      START SESSION
-  ===================================================== */
+  ========================================================= */
 
-  const startSession = () => {
-    if (!machineSent) {
-      alert(
-        "Please click 'Send to Machine' before starting the session."
-      );
+  const startIFTSession = () => {
+    if (!selectedPatient) {
+      alert("Please select a patient.");
       return;
     }
 
@@ -587,193 +457,134 @@ useEffect(() => {
       !treatmentParameters.intensity ||
       !treatmentParameters.duration
     ) {
-      alert("Please enter all treatment parameters.");
+      alert(
+        "Please complete the treatment parameters."
+      );
       return;
+    }
+
+    if (!machineSent) {
+      const proceed = window.confirm(
+        "Parameters have not been sent to the machine yet.\n\nContinue to the safety screening?"
+      );
+
+      if (!proceed) return;
     }
 
     setShowSafetyWarning(true);
   };
 
-  /* =====================================================
-     SAFETY CONFIRM
-  ===================================================== */
+  /* =========================================================
+     CONFIRM SAFETY
+  ========================================================= */
 
   const confirmSafetyAndStart = () => {
     setShowSafetyWarning(false);
+
     setSessionSeconds(0);
     setAfterPainScore("");
-    setShowAfterTreatmentPopup(false);
+
     setSessionStatus("running");
   };
 
-  /* =====================================================
+  /* =========================================================
+     SESSION TIMER
+  ========================================================= */
+
+  useEffect(() => {
+    if (sessionStatus !== "running") return;
+
+    const timer = setInterval(() => {
+      setSessionSeconds((current) => {
+        const durationSeconds =
+          Number(treatmentParameters.duration || 0) *
+          60;
+
+        if (
+          durationSeconds > 0 &&
+          current + 1 >= durationSeconds
+        ) {
+          setSessionStatus("completed");
+
+          return durationSeconds;
+        }
+
+        return current + 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [
+    sessionStatus,
+    treatmentParameters.duration,
+  ]);
+
+  /* =========================================================
      PAUSE
-  ===================================================== */
+  ========================================================= */
 
   const pauseSession = () => {
-    setSessionStatus("paused");
+    if (sessionStatus === "running") {
+      setSessionStatus("paused");
+    }
   };
 
-  /* =====================================================
+  /* =========================================================
      CONTINUE
-  ===================================================== */
+  ========================================================= */
 
   const continueSession = () => {
-    setSessionStatus("running");
+    if (sessionStatus === "paused") {
+      setSessionStatus("running");
+    }
   };
 
-  /* =====================================================
+  /* =========================================================
      STOP
-  ===================================================== */
+  ========================================================= */
 
   const stopSession = () => {
+    const confirmed = window.confirm(
+      "Stop the current IFT session?"
+    );
+
+    if (!confirmed) return;
+
     setSessionStatus("stopped");
-    setShowAfterTreatmentPopup(true);
   };
-/* =====================================================
-   ADD PATIENT
-===================================================== */
 
-const addPatient = async (e) => {
-  e.preventDefault();
+  /* =========================================================
+     SAVE COMPLETED SESSION
+  ========================================================= */
 
-  if (!username) {
-    alert("Please login first.");
-    return;
-  }
-
-  try {
-    const newPatient = {
-      patient_id: `P${Date.now()}`,
-      name: patientForm.name,
-      age: Number(patientForm.age),
-      gender: patientForm.gender,
-    };
-
-    const savedPatient = await createPatient(newPatient);
-
-    console.log("Patient saved to backend:", savedPatient);
-
-    const frontendPatient = {
-      id: savedPatient.patient_id,
-      username: username,
-      name: savedPatient.name,
-      age: savedPatient.age,
-      gender: savedPatient.gender,
-      phone: patientForm.phone,
-      diagnosis: patientForm.diagnosis,
-      painScore: patientForm.painScore,
-      notes: patientForm.notes,
-      createdAt: new Date().toLocaleString(),
-    };
-
-    updateCurrentUserData({
-      patients: [...patients, frontendPatient],
-    });
-
-    setPatientForm(EMPTY_PATIENT_FORM);
-    setPage("patients");
-
-    alert("Patient added successfully!");
-
-  } catch (error) {
-    console.error("Error creating patient:", error);
-    alert(`Could not save patient: ${error.message}`);
-  }
-};
-  /* =====================================================
-     SAVE SESSION
-  ===================================================== */
-
-  const saveSession = async () => {
+  const saveCompletedSession = () => {
     if (!selectedPatient) return;
 
-    if (afterPainScore === "") {
+    if (
+      afterPainScore === "" ||
+      Number(afterPainScore) < 0 ||
+      Number(afterPainScore) > 10
+    ) {
       alert(
-        "Please enter the patient's after-treatment pain score."
+        "Please enter a valid post-treatment pain score from 0 to 10."
       );
       return;
     }
 
-    const patientSessions = sessionHistory.filter(
-      (session) =>
-        session.patientId === selectedPatient.id
-    );
-
-    const sessionNumber = patientSessions.length + 1;
-    const backendSession = {
-  patient_id: selectedPatient.id,
-
-  condition:
-    selectedPatient.diagnosis || "",
-
-  severity: "",
-
-  pain_before:
-    selectedPatient.painScore === ""
-      ? null
-      : Number(selectedPatient.painScore),
-
-  pain_after:
-    afterPainScore === ""
-      ? null
-      : Number(afterPainScore),
-
-  carrier_frequency:
-    treatmentParameters.carrierFrequency === ""
-      ? null
-      : Number(treatmentParameters.carrierFrequency),
-
-  beat_frequency:
-    treatmentParameters.beatFrequency === ""
-      ? null
-      : Number(treatmentParameters.beatFrequency),
-
-  intensity:
-    treatmentParameters.intensity === ""
-      ? null
-      : Number(treatmentParameters.intensity),
-
-  duration:
-    treatmentParameters.duration === ""
-      ? null
-      : Number(treatmentParameters.duration),
-
-  notes:
-    treatmentParameters.notes || "",
-
-  report_filename: null,
-
-  report_path: null,
-};
-
-const savedBackendSession =
-  await createSession(backendSession);
-
-console.log(
-  "Session saved to backend:",
-  savedBackendSession
-);
     const newSession = {
-      id: `S${String(sessionHistory.length + 1).padStart(
-        3,
-        "0"
-      )}`,
-
-      sessionNumber,
-
-      username,
+      id: `S-${Date.now()}`,
 
       patientId: selectedPatient.id,
 
       patientName: selectedPatient.name,
 
-      date: new Date().toLocaleString(),
+      date: new Date().toISOString(),
 
-      beforePainScore:
-        selectedPatient.painScore,
+      painBefore: Number(
+        selectedPatient.painScore || 0
+      ),
 
-      afterPainScore,
+      painAfter: Number(afterPainScore),
 
       carrierFrequency:
         treatmentParameters.carrierFrequency,
@@ -790,2600 +601,775 @@ console.log(
       notes:
         treatmentParameters.notes,
 
-      recommendationMode,
+      xrayUploaded:
+        Boolean(xrayFile),
 
-      status: sessionStatus,
+      reportUploaded:
+        Boolean(reportFile),
 
-      sessionTime:
-        formatTime(sessionSeconds),
+      status: "Completed",
     };
 
     const updatedSessions = [
-      ...sessionHistory,
+      ...sessions,
       newSession,
     ];
 
     const updatedPatients = patients.map(
-      (patient) => {
-        if (patient.id !== selectedPatient.id) {
-          return patient;
-        }
-
-        return {
-          ...patient,
-          painScore: afterPainScore,
-        };
-      }
+      (patient) =>
+        patient.id === selectedPatient.id
+          ? {
+              ...patient,
+              painScore: afterPainScore,
+            }
+          : patient
     );
 
-    updateCurrentUserData({
-      patients: updatedPatients,
-      sessions: updatedSessions,
-    });
+    updateUserData(
+      updatedPatients,
+      updatedSessions
+    );
 
-    setSelectedPatient((previous) => ({
-      ...previous,
-      painScore: afterPainScore,
-    }));
-
-    setShowAfterTreatmentPopup(false);
+    setSessionStatus("idle");
+    setSessionSeconds(0);
     setAfterPainScore("");
+    setMachineSent(false);
 
-    alert(
-      `Session ${sessionNumber} saved successfully.`
-    );
+    setAiRecommendation(null);
 
-    setPage("patients");
+    setXrayFile(null);
+    setReportFile(null);
+
+    setXrayPreview("");
+    setReportPreview("");
+
+    setPage("history");
+
+    alert("IFT session saved successfully.");
   };
 
-  /* =====================================================
-     LOGOUT
-  ===================================================== */
+  /* =========================================================
+     NEW SESSION RESET
+  ========================================================= */
 
-  const logout = () => {
-    setLoggedIn(false);
-    setUsername("");
-    setSelectedPatient(null);
-    setPage("dashboard");
-    setShowUserMenu(false);
+  const resetNewSession = () => {
+    setSelectedPatientId("");
 
-    localStorage.removeItem("smartIFT_loggedIn");
-    localStorage.removeItem("smartIFT_username");
+    setTreatmentParameters(
+      EMPTY_PARAMETERS
+    );
+
+    setAiRecommendation(null);
+
+    setXrayFile(null);
+    setReportFile(null);
+
+    setXrayPreview("");
+    setReportPreview("");
+
+    setMachineSent(false);
+
+    setSessionStatus("idle");
+
+    setSessionSeconds(0);
+
+    setAfterPainScore("");
   };
 
-  /* =====================================================
-     LOGIN PAGE
-  ===================================================== */
+  /* =========================================================
+     DASHBOARD COUNTS
+  ========================================================= */
 
-  if (!loggedIn) {
+  const completedSessions =
+    sessions.filter(
+      (session) =>
+        session.status === "Completed"
+    );
+
+  const latestSession = sessions.length
+    ? [...sessions].sort(
+        (a, b) =>
+          new Date(b.date) -
+          new Date(a.date)
+      )[0]
+    : null;
+
+  /* =========================================================
+     LOGIN
+  ========================================================= */
+
+  if (!loggedInUser) {
     return (
-      <div className="login-page">
-        <div className="login-card">
-
-          <div className="logo-circle">
-            ⚡
-          </div>
-
-          <h1>MY IFT</h1>
-
-          <p className="subtitle">
-            Intelligent Interferential Therapy
-          </p>
-
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-
-              const enteredUsername =
-                e.target.username.value.trim();
-
-              if (!enteredUsername) return;
-
-              setUsersData((previous) => ({
-                ...previous,
-
-                [enteredUsername]:
-                  previous[enteredUsername] || {
-                    patients: [],
-                    sessions: [],
-                  },
-              }));
-
-              setUsername(enteredUsername);
-
-              localStorage.setItem(
-                "smartIFT_username",
-                enteredUsername
-              );
-
-              localStorage.setItem(
-                "smartIFT_loggedIn",
-                "true"
-              );
-
-              setLoggedIn(true);
-              setPage("dashboard");
-            }}
-          >
-
-            <label>Username</label>
-
-            <input
-              name="username"
-              type="text"
-              placeholder="Enter username"
-              required
-            />
-
-            <label>Password</label>
-
-            <input
-              name="password"
-              type="password"
-              placeholder="Enter password"
-              required
-            />
-
-            <button type="submit">
-              Login
-            </button>
-
-          </form>
-
-          <p className="login-note">
-            AI-powered physiotherapy management system
-          </p>
-
-        </div>
-      </div>
+      <LoginScreen
+        onLogin={handleLogin}
+      />
     );
   }
 
-  /* =====================================================
-     PROFILE
-  ===================================================== */
-
-  if (page === "profile") {
-    return (
-      <div className="dashboard">
-
-        <header className="dashboard-header">
-
-          <div>
-            <h1>MY IFT</h1>
-            <p>User Profile</p>
-          </div>
-
-          <div
-            style={{
-              position: "relative",
-            }}
-          >
-            <button
-              className="secondary-button"
-              onClick={() =>
-                setShowUserMenu(
-                  (previous) => !previous
-                )
-              }
-            >
-              👤 {username} ▾
-            </button>
-
-            {showUserMenu && (
-              <div
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  top: "calc(100% + 8px)",
-                  background: "#ffffff",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "10px",
-                  padding: "8px",
-                  minWidth: "180px",
-                  boxShadow:
-                    "0 10px 30px rgba(0,0,0,0.15)",
-                  zIndex: 1000,
-                }}
-              >
-
-                <button
-                  className="secondary-button"
-                  style={{
-                    width: "100%",
-                    marginBottom: "6px",
-                  }}
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    setPage("profile");
-                  }}
-                >
-                  👤 Profile
-                </button>
-
-                <button
-                  className="logout-button"
-                  style={{
-                    width: "100%",
-                  }}
-                  onClick={logout}
-                >
-                  🚪 Logout
-                </button>
-
-              </div>
-            )}
-          </div>
-
-        </header>
-
-        <section className="welcome-section">
-
-          <button
-            className="back-button"
-            onClick={() =>
-              setPage("dashboard")
-            }
-          >
-            ← Back to Dashboard
-          </button>
-
-          <h2>User Profile</h2>
-
-          <p>
-            Your MY IFT account.
-          </p>
-
-        </section>
-
-        <section className="patients-section">
-
-          <div className="patient-card">
-
-            <div className="patient-avatar">
-              👤
-            </div>
-
-            <div className="patient-details">
-
-              <h3>{username}</h3>
-
-              <p>
-                <strong>Username:</strong>{" "}
-                {username}
-              </p>
-
-              <p>
-                <strong>Number of Patients:</strong>{" "}
-                {patients.length}
-              </p>
-
-              <p>
-                <strong>Total Sessions:</strong>{" "}
-                {sessionHistory.length}
-              </p>
-
-            </div>
-
-          </div>
-
-        </section>
-
-      </div>
-    );
-  }
-
-  /* =====================================================
-     TREATMENT PAGE
-  ===================================================== */
-
-  if (
-    page === "treatment" &&
-    selectedPatient
-  ) {
-    return (
-      <div className="dashboard">
-
-        <header className="dashboard-header">
-
-          <div>
-            <h1>MY IFT</h1>
-            <p>Treatment Session</p>
-          </div>
-
-          <div
-            style={{
-              position: "relative",
-            }}
-          >
-
-            <button
-              className="secondary-button"
-              onClick={() =>
-                setShowUserMenu(
-                  (previous) => !previous
-                )
-              }
-            >
-              👤 {username} ▾
-            </button>
-
-            {showUserMenu && (
-              <div
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  top: "calc(100% + 8px)",
-                  background: "#ffffff",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "10px",
-                  padding: "8px",
-                  minWidth: "180px",
-                  boxShadow:
-                    "0 10px 30px rgba(0,0,0,0.15)",
-                  zIndex: 1000,
-                }}
-              >
-
-                <button
-                  className="secondary-button"
-                  style={{
-                    width: "100%",
-                    marginBottom: "6px",
-                  }}
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    setPage("profile");
-                  }}
-                >
-                  👤 Profile
-                </button>
-
-                <button
-                  className="logout-button"
-                  style={{
-                    width: "100%",
-                  }}
-                  onClick={logout}
-                >
-                  🚪 Logout
-                </button>
-
-              </div>
-            )}
-
-          </div>
-
-        </header>
-
-        <section className="welcome-section">
-
-          <button
-            className="back-button"
-            onClick={() =>
-              setPage("patients")
-            }
-          >
-            ← Back to Patients
-          </button>
-
-          <h2>Treatment Session</h2>
-
-          <p>
-            Configure treatment for{" "}
-            <strong>
-              {selectedPatient.name}
-            </strong>
-          </p>
-
-        </section>
-
-        {/* PATIENT INFORMATION */}
-
-        <section className="patients-section">
-
-          <div className="section-header">
-            <div>
-              <h2>Patient Information</h2>
-
-              <p>
-                Patient details for this treatment.
-              </p>
-            </div>
-          </div>
-
-          <div className="patient-card">
-
-            <div className="patient-avatar">
-              👤
-            </div>
-
-            <div className="patient-details">
-
-              <div className="patient-title">
-
-                <h3>
-                  {selectedPatient.name}
-                </h3>
-
-                <span className="patient-id">
-                  {selectedPatient.id}
-                </span>
-
-              </div>
-
-              <div className="patient-info">
-
-                <span>
-                  Age: {selectedPatient.age}
-                </span>
-
-                <span>
-                  Gender: {selectedPatient.gender}
-                </span>
-
-                <span>
-                  Phone: {selectedPatient.phone}
-                </span>
-
-              </div>
-
-              <p>
-                <strong>Diagnosis:</strong>{" "}
-                {selectedPatient.diagnosis}
-              </p>
-
-              <p>
-                <strong>Current Pain Score:</strong>{" "}
-                {selectedPatient.painScore}/10
-              </p>
-
-            </div>
-
-          </div>
-
-        </section>
-
-        {/* AI */}
-
-        <section className="form-section">
-
-          <div className="form-title">
-
-            <div>
-              <h2>
-                🤖 AI Treatment Recommendation
-              </h2>
-
-              <p>
-                Generate treatment parameters using
-                the recommendation engine.
-              </p>
-            </div>
-
-            <div className="form-icon">
-              🤖
-            </div>
-
-          </div>
-
-          <button
-            className="primary-button"
-            onClick={generateAIRecommendation}
-          >
-            Generate AI Recommendation
-          </button>
-
-          {aiRecommendation && (
-            <div
-              style={{
-                marginTop: "20px",
-                padding: "20px",
-                background: "#f8fafc",
-                borderRadius: "10px",
-                border: "1px solid #dbe3ef",
-              }}
-            >
-
-              <h3>
-                AI Suggested Parameters
-              </h3>
-
-              <p>
-                Carrier Frequency:{" "}
-                <strong>
-                  {aiRecommendation.carrierFrequency} Hz
-                </strong>
-              </p>
-
-              <p>
-                Beat Frequency:{" "}
-                <strong>
-                  {aiRecommendation.beatFrequency} Hz
-                </strong>
-              </p>
-
-              <p>
-                Intensity:{" "}
-                <strong>
-                  {aiRecommendation.intensity} mA
-                </strong>
-              </p>
-
-              <p>
-                Duration:{" "}
-                <strong>
-                  {aiRecommendation.duration} minutes
-                </strong>
-              </p>
-
-              <button
-                className="primary-button"
-                onClick={applyAIRecommendation}
-              >
-                Use AI Recommendation
-              </button>
-
-            </div>
-          )}
-
-        </section>
-
-        {/* PARAMETERS */}
-
-        <section className="form-section">
-
-          <div className="form-title">
-
-            <div>
-              <h2>Treatment Parameters</h2>
-
-              <p>
-                Enter manually or use AI recommendation.
-              </p>
-            </div>
-
-            <div className="form-icon">
-              ⚡
-            </div>
-
-          </div>
-
-          <div className="patient-form">
-
-            <div className="form-group">
-
-              <label>
-                Carrier Frequency (Hz)
-              </label>
-
-              <input
-                type="number"
-                name="carrierFrequency"
-                value={
-                  treatmentParameters.carrierFrequency
-                }
-                onChange={handleTreatmentChange}
-                placeholder="Example: 4000"
-                min="1"
-              />
-
-            </div>
-
-            <div className="form-group">
-
-              <label>
-                Beat Frequency (Hz)
-              </label>
-
-              <input
-                type="number"
-                name="beatFrequency"
-                value={
-                  treatmentParameters.beatFrequency
-                }
-                onChange={handleTreatmentChange}
-                placeholder="Example: 100"
-                min="1"
-              />
-
-            </div>
-
-            <div className="form-group">
-
-              <label>
-                Current / Intensity (mA)
-              </label>
-
-              <input
-                type="number"
-                name="intensity"
-                value={
-                  treatmentParameters.intensity
-                }
-                onChange={handleTreatmentChange}
-                placeholder="Enter intensity"
-                min="0"
-                step="0.1"
-              />
-
-            </div>
-
-            <div className="form-group">
-
-              <label>
-                Treatment Duration (minutes)
-              </label>
-
-              <input
-                type="number"
-                name="duration"
-                value={
-                  treatmentParameters.duration
-                }
-                onChange={handleTreatmentChange}
-                placeholder="Example: 15"
-                min="1"
-              />
-
-            </div>
-
-            <div className="form-group full-width">
-
-              <label>
-                Therapist Notes
-              </label>
-
-              <textarea
-                name="notes"
-                value={
-                  treatmentParameters.notes
-                }
-                onChange={handleTreatmentChange}
-                placeholder="Enter treatment observations..."
-                rows="4"
-              />
-
-            </div>
-
-          </div>
-
-          <div
-            style={{
-              marginTop: "20px",
-              padding: "15px",
-              background: "#f8fafc",
-              borderRadius: "10px",
-            }}
-          >
-            <strong>
-              Parameter Source:
-            </strong>{" "}
-            {recommendationMode === "ai"
-              ? "AI Recommendation"
-              : "Manual Entry"}
-          </div>
-
-          <div
-            style={{
-              marginTop: "20px",
-              display: "flex",
-              alignItems: "center",
-              gap: "15px",
-              flexWrap: "wrap",
-            }}
-          >
-
-            <button
-              className="primary-button"
-              onClick={sendToMachine}
-            >
-              ⚡ Send to Machine
-            </button>
-
-            {machineSent && (
-              <span
-                style={{
-                  fontWeight: "600",
-                  color: "#16a34a",
-                }}
-              >
-                ✓ Parameters ready for ESP32
-              </span>
-            )}
-
-          </div>
-
-        </section>
-
-        {/* SESSION CONTROL */}
-
-        <section className="patients-section">
-
-          <div className="section-header">
-
-            <div>
-              <h2>Session Control</h2>
-
-              <p>
-                Control the treatment session.
-              </p>
-            </div>
-
-          </div>
-
-          <div
-            style={{
-              textAlign: "center",
-              padding: "20px",
-            }}
-          >
-
-            <h2>
-
-              {sessionStatus === "running"
-                ? "🟢 Session Running"
-                : sessionStatus === "paused"
-                ? "🟡 Session Paused"
-                : sessionStatus === "completed"
-                ? "✅ Session Completed"
-                : sessionStatus === "stopped"
-                ? "🔴 Session Stopped"
-                : "⚪ Session Not Started"}
-
-            </h2>
-
-            <h1>
-              {formatTime(sessionSeconds)}
-            </h1>
-
-            {sessionStatus === "not-started" && (
-              <button
-                className="primary-button"
-                onClick={startSession}
-              >
-                ▶ Start Session
-              </button>
-            )}
-
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "center",
-                gap: "12px",
-                flexWrap: "wrap",
-                marginTop: "20px",
-              }}
-            >
-
-              <button
-                className="secondary-button"
-                onClick={pauseSession}
-                disabled={
-                  sessionStatus !== "running"
-                }
-              >
-                ⏸ Pause
-              </button>
-
-              <button
-                className="primary-button"
-                onClick={continueSession}
-                disabled={
-                  sessionStatus !== "paused"
-                }
-              >
-                ▶ Continue
-              </button>
-
-              <button
-                className="logout-button"
-                onClick={stopSession}
-                disabled={
-                  sessionStatus !== "running" &&
-                  sessionStatus !== "paused"
-                }
-              >
-                ⏹ Stop
-              </button>
-
-            </div>
-
-          </div>
-
-        </section>
-
-        {/* =================================================
-            AFTER TREATMENT POPUP
-        ================================================= */}
-
-        {showAfterTreatmentPopup && (
-          <div
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(15, 23, 42, 0.65)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "20px",
-              zIndex: 10000,
-            }}
-          >
-
-            <div
-              style={{
-                width: "100%",
-                maxWidth: "520px",
-                background: "#ffffff",
-                borderRadius: "20px",
-                padding: "30px",
-                boxShadow:
-                  "0 20px 60px rgba(0,0,0,0.3)",
-              }}
-            >
-
-              <div
-                style={{
-                  textAlign: "center",
-                  fontSize: "48px",
-                  marginBottom: "10px",
-                }}
-              >
-                📊
-              </div>
-
-              <h2
-                style={{
-                  textAlign: "center",
-                  marginBottom: "8px",
-                }}
-              >
-                After Treatment Assessment
-              </h2>
-
-              <p
-                style={{
-                  textAlign: "center",
-                  color: "#64748b",
-                  marginBottom: "25px",
-                }}
-              >
-                Treatment session has ended for{" "}
-                <strong>
-                  {selectedPatient.name}
-                </strong>
-              </p>
-
-              <div
-                style={{
-                  background: "#f8fafc",
-                  borderRadius: "12px",
-                  padding: "18px",
-                  marginBottom: "20px",
-                }}
-              >
-
-                <p>
-                  <strong>
-                    Before Treatment Pain:
-                  </strong>{" "}
-                  {selectedPatient.painScore}/10
-                </p>
-
-                <p>
-                  <strong>
-                    Session Duration:
-                  </strong>{" "}
-                  {formatTime(sessionSeconds)}
-                </p>
-
-                <p>
-                  <strong>
-                    Session Status:
-                  </strong>{" "}
-                  {sessionStatus}
-                </p>
-
-              </div>
-
-              <div className="form-group">
-
-                <label
-                  style={{
-                    fontWeight: "700",
-                    display: "block",
-                    marginBottom: "8px",
-                  }}
-                >
-                  After Treatment Pain Score (0–10)
-                </label>
-
-                <input
-                  type="number"
-                  value={afterPainScore}
-                  onChange={(e) => {
-                    const value = e.target.value;
-
-                    if (
-                      value === "" ||
-                      (Number(value) >= 0 &&
-                        Number(value) <= 10)
-                    ) {
-                      setAfterPainScore(value);
-                    }
-                  }}
-                  placeholder="Enter patient's pain score"
-                  min="0"
-                  max="10"
-                  step="1"
-                  autoFocus
-                  style={{
-                    width: "100%",
-                    fontSize: "20px",
-                    padding: "14px",
-                    textAlign: "center",
-                  }}
-                />
-
-              </div>
-
-              <div
-                style={{
-                  marginTop: "15px",
-                  padding: "12px",
-                  background: "#eff6ff",
-                  borderRadius: "10px",
-                  color: "#1e40af",
-                }}
-              >
-                💡 Enter the pain score reported by the
-                patient immediately after treatment.
-              </div>
-
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: "12px",
-                  marginTop: "25px",
-                  flexWrap: "wrap",
-                }}
-              >
-
-                <button
-                  className="secondary-button"
-                  onClick={() => {
-                    setShowAfterTreatmentPopup(false);
-                  }}
-                >
-                  Cancel
-                </button>
-
-                <button
-                  className="primary-button"
-                  onClick={saveSession}
-                >
-                  💾 Save Session
-                </button>
-
-              </div>
-
-            </div>
-          </div>
-        )}
-
-        {/* =================================================
-            SAFETY POPUP
-        ================================================= */}
-
-        {showSafetyWarning && (
-          <div
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,0.55)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              padding: "20px",
-              zIndex: 9999,
-            }}
-          >
-
-            <div
-              style={{
-                background: "white",
-                width: "100%",
-                maxWidth: "650px",
-                maxHeight: "90vh",
-                overflowY: "auto",
-                borderRadius: "16px",
-                padding: "30px",
-                boxShadow:
-                  "0 15px 50px rgba(0,0,0,0.25)",
-              }}
-            >
-
-              <h2>
-                ⚠️ Safety Screening
-              </h2>
-
-              <p>
-                <strong>
-                  Consult a qualified clinician before
-                  starting treatment.
-                </strong>
-              </p>
-
-              <p>
-                Confirm that none of the following apply:
-              </p>
-
-              <ul
-                style={{
-                  lineHeight: "1.8",
-                }}
-              >
-
-                <li>
-                  No pacemaker/ICD or other implanted
-                  electronic device
-                </li>
-
-                <li>
-                  Not pregnant, or treatment location
-                  has been medically cleared
-                </li>
-
-                <li>
-                  No cancer/tumor at the treatment area
-                </li>
-
-                <li>
-                  No open wound, infection, or severe
-                  skin irritation at electrode sites
-                </li>
-
-                <li>
-                  Normal sensation at the treatment area
-                </li>
-
-                <li>
-                  No unexplained bleeding
-                </li>
-
-                <li>
-                  Treatment area has been medically/
-                  clinically cleared after recent
-                  surgery or injury
-                </li>
-
-                <li>
-                  Electrodes will not be placed across
-                  the chest or front of the neck
-                </li>
-
-              </ul>
-
-              <div
-                style={{
-                  padding: "15px",
-                  background: "#fff7ed",
-                  borderRadius: "10px",
-                  marginBottom: "20px",
-                }}
-              >
-
-                <strong>
-                  If any answer is YES → do not start
-                  automatically; refer to a qualified
-                  physiotherapist/doctor.
-                </strong>
-
-              </div>
-
-              <p
-                style={{
-                  color: "#64748b",
-                }}
-              >
-                This application provides safety
-                screening support and does not determine
-                whether a patient is medically fit for
-                IFT treatment.
-              </p>
-
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: "12px",
-                  marginTop: "20px",
-                }}
-              >
-
-                <button
-                  className="secondary-button"
-                  onClick={() =>
-                    setShowSafetyWarning(false)
-                  }
-                >
-                  Cancel
-                </button>
-
-                <button
-                  className="primary-button"
-                  onClick={confirmSafetyAndStart}
-                >
-                  ✓ Safety Checked — Start Session
-                </button>
-
-              </div>
-
-            </div>
-
-          </div>
-        )}
-
-      </div>
-    );
-  }
-
-  /* =====================================================
-     HISTORY PAGE
-     CONNECTED SESSION GRAPH
-  ===================================================== */
-
-  if (page === "history") {
-
-    return (
-      <div className="dashboard">
-
-        <header className="dashboard-header">
-
-          <div>
-            <h1>MY IFT</h1>
-            <p>Session History</p>
-          </div>
-
-          <div
-            style={{
-              position: "relative",
-            }}
-          >
-
-            <button
-              className="secondary-button"
-              onClick={() =>
-                setShowUserMenu(
-                  (previous) => !previous
-                )
-              }
-            >
-              👤 {username} ▾
-            </button>
-
-            {showUserMenu && (
-              <div
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  top: "calc(100% + 8px)",
-                  background: "#ffffff",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "10px",
-                  padding: "8px",
-                  minWidth: "180px",
-                  boxShadow:
-                    "0 10px 30px rgba(0,0,0,0.15)",
-                  zIndex: 1000,
-                }}
-              >
-
-                <button
-                  className="secondary-button"
-                  style={{
-                    width: "100%",
-                    marginBottom: "6px",
-                  }}
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    setPage("profile");
-                  }}
-                >
-                  👤 Profile
-                </button>
-
-                <button
-                  className="logout-button"
-                  style={{
-                    width: "100%",
-                  }}
-                  onClick={logout}
-                >
-                  🚪 Logout
-                </button>
-
-              </div>
-            )}
-
-          </div>
-
-        </header>
-
-        <section className="welcome-section">
-
-          <button
-            className="back-button"
-            onClick={() =>
-              setPage("dashboard")
-            }
-          >
-            ← Back to Dashboard
-          </button>
-
-          <h2>
-            Complete Session History
-          </h2>
-
-          <p>
-            All treatment sessions for{" "}
-            <strong>{username}</strong>
-          </p>
-
-        </section>
-
-        <section className="patients-section">
-
-          {sessionHistory.length === 0 ? (
-
-            <div className="empty-state">
-
-              <div className="empty-icon">
-                📊
-              </div>
-
-              <h3>
-                No Sessions Yet
-              </h3>
-
-              <p>
-                Completed sessions will appear here.
-              </p>
-
-            </div>
-
-          ) : (
-
-            patients.map((patient) => {
-
-              const patientSessions =
-                sessionHistory
-                  .filter(
-                    (session) =>
-                      session.patientId === patient.id
-                  )
-                  .sort(
-                    (a, b) =>
-                      a.sessionNumber -
-                      b.sessionNumber
-                  );
-
-              if (patientSessions.length === 0) {
-                return null;
-              }
-
-              const beforeValues =
-                patientSessions.map((session) =>
-                  Number(session.beforePainScore)
-                );
-
-              const afterValues =
-                patientSessions.map((session) =>
-                  Number(session.afterPainScore)
-                );
-
-              const allValues = [
-                ...beforeValues,
-                ...afterValues,
-              ];
-
-              const maxPain = Math.max(
-                10,
-                ...allValues
-              );
-
-              const chartWidth = 800;
-              const chartHeight = 320;
-
-              const left = 65;
-              const right = 30;
-              const top = 35;
-              const bottom = 60;
-
-              const graphWidth =
-                chartWidth - left - right;
-
-              const graphHeight =
-                chartHeight - top - bottom;
-
-              const getX = (index) => {
-                if (patientSessions.length === 1) {
-                  return left + graphWidth / 2;
-                }
-
-                return (
-                  left +
-                  (index /
-                    (patientSessions.length - 1)) *
-                    graphWidth
-                );
-              };
-
-              const getY = (value) => {
-                return (
-                  top +
-                  graphHeight -
-                  (value / maxPain) *
-                    graphHeight
-                );
-              };
-
-              const beforePoints =
-                beforeValues
-                  .map(
-                    (value, index) =>
-                      `${getX(index)},${getY(value)}`
-                  )
-                  .join(" ");
-
-              const afterPoints =
-                afterValues
-                  .map(
-                    (value, index) =>
-                      `${getX(index)},${getY(value)}`
-                  )
-                  .join(" ");
-
-              return (
-                <div
-                  key={patient.id}
-                  style={{
-                    marginBottom: "50px",
-                  }}
-                >
-
-                  {/* PATIENT HEADER */}
-
-                  <div
-                    className="patient-card"
-                    style={{
-                      marginBottom: "20px",
-                    }}
-                  >
-
-                    <div className="patient-avatar">
-                      👤
-                    </div>
-
-                    <div className="patient-details">
-
-                      <div className="patient-title">
-
-                        <h3>
-                          {patient.name}
-                        </h3>
-
-                        <span className="patient-id">
-                          {patient.id}
-                        </span>
-
-                      </div>
-
-                      <div className="patient-info">
-
-                        <span>
-                          Age: {patient.age}
-                        </span>
-
-                        <span>
-                          Gender: {patient.gender}
-                        </span>
-
-                        <span>
-                          Diagnosis: {patient.diagnosis}
-                        </span>
-
-                      </div>
-
-                      <p>
-                        <strong>
-                          Total Sessions:
-                        </strong>{" "}
-                        {patientSessions.length}
-                      </p>
-
-                    </div>
-
-                  </div>
-
-                  {/* CONNECTED GRAPH */}
-
-                  <div
-                    style={{
-                      background: "#ffffff",
-                      borderRadius: "16px",
-                      padding: "20px",
-                      marginBottom: "25px",
-                      border: "1px solid #e2e8f0",
-                      boxShadow:
-                        "0 5px 20px rgba(15,23,42,0.06)",
-                    }}
-                  >
-
-                    <h3>
-                      📈 Pain Score Progress
-                    </h3>
-
-                    <p
-                      style={{
-                        color: "#64748b",
-                      }}
-                    >
-                      Connected pain-score trend across
-                      Session 1, Session 2, Session 3 and
-                      future sessions.
-                    </p>
-
-                    <div
-                      style={{
-                        width: "100%",
-                        overflowX: "auto",
-                      }}
-                    >
-
-                      <svg
-                        viewBox={`0 0 ${chartWidth} ${chartHeight}`}
-                        width="100%"
-                        height="320"
-                        style={{
-                          minWidth:
-                            patientSessions.length >
-                            5
-                              ? "700px"
-                              : "500px",
-                        }}
-                      >
-
-                        {/* GRID */}
-
-                        {[0, 2, 4, 6, 8, 10].map(
-                          (value) => {
-
-                            const y =
-                              getY(value);
-
-                            return (
-                              <g key={value}>
-
-                                <line
-                                  x1={left}
-                                  y1={y}
-                                  x2={
-                                    chartWidth -
-                                    right
-                                  }
-                                  y2={y}
-                                  stroke="#e2e8f0"
-                                  strokeWidth="1"
-                                />
-
-                                <text
-                                  x={left - 15}
-                                  y={y + 5}
-                                  textAnchor="end"
-                                  fontSize="12"
-                                  fill="#64748b"
-                                >
-                                  {value}
-                                </text>
-
-                              </g>
-                            );
-                          }
-                        )}
-
-                        {/* Y AXIS */}
-
-                        <line
-                          x1={left}
-                          y1={top}
-                          x2={left}
-                          y2={
-                            chartHeight -
-                            bottom
-                          }
-                          stroke="#94a3b8"
-                          strokeWidth="2"
-                        />
-
-                        {/* X AXIS */}
-
-                        <line
-                          x1={left}
-                          y1={
-                            chartHeight -
-                            bottom
-                          }
-                          x2={
-                            chartWidth -
-                            right
-                          }
-                          y2={
-                            chartHeight -
-                            bottom
-                          }
-                          stroke="#94a3b8"
-                          strokeWidth="2"
-                        />
-
-                        {/* BEFORE LINE */}
-
-                        <polyline
-                          points={beforePoints}
-                          fill="none"
-                          stroke="#2563eb"
-                          strokeWidth="4"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-
-                        {/* AFTER LINE */}
-
-                        <polyline
-                          points={afterPoints}
-                          fill="none"
-                          stroke="#16a34a"
-                          strokeWidth="4"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-
-                        {/* POINTS */}
-
-                        {patientSessions.map(
-                          (session, index) => {
-
-                            const x =
-                              getX(index);
-
-                            const beforeY =
-                              getY(
-                                Number(
-                                  session.beforePainScore
-                                )
-                              );
-
-                            const afterY =
-                              getY(
-                                Number(
-                                  session.afterPainScore
-                                )
-                              );
-
-                            return (
-                              <g
-                                key={
-                                  session.id
-                                }
-                              >
-
-                                <circle
-                                  cx={x}
-                                  cy={beforeY}
-                                  r="6"
-                                  fill="#2563eb"
-                                />
-
-                                <text
-                                  x={x}
-                                  y={
-                                    beforeY -
-                                    12
-                                  }
-                                  textAnchor="middle"
-                                  fontSize="12"
-                                  fontWeight="700"
-                                  fill="#2563eb"
-                                >
-                                  {
-                                    session.beforePainScore
-                                  }
-                                </text>
-
-                                <circle
-                                  cx={x}
-                                  cy={afterY}
-                                  r="6"
-                                  fill="#16a34a"
-                                />
-
-                                <text
-                                  x={x}
-                                  y={
-                                    afterY +
-                                    20
-                                  }
-                                  textAnchor="middle"
-                                  fontSize="12"
-                                  fontWeight="700"
-                                  fill="#16a34a"
-                                >
-                                  {
-                                    session.afterPainScore
-                                  }
-                                </text>
-
-                                <text
-                                  x={x}
-                                  y={
-                                    chartHeight -
-                                    25
-                                  }
-                                  textAnchor="middle"
-                                  fontSize="13"
-                                  fontWeight="700"
-                                  fill="#334155"
-                                >
-                                  Session{" "}
-                                  {
-                                    session.sessionNumber
-                                  }
-                                </text>
-
-                              </g>
-                            );
-                          }
-                        )}
-
-                      </svg>
-
-                    </div>
-
-                    {/* LEGEND */}
-
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "center",
-                        gap: "30px",
-                        flexWrap: "wrap",
-                        marginTop: "10px",
-                      }}
-                    >
-
-                      <span>
-
-                        <span
-                          style={{
-                            display:
-                              "inline-block",
-                            width: "14px",
-                            height: "14px",
-                            borderRadius:
-                              "50%",
-                            background:
-                              "#2563eb",
-                            marginRight:
-                              "7px",
-                          }}
-                        />
-
-                        Before Treatment
-
-                      </span>
-
-                      <span>
-
-                        <span
-                          style={{
-                            display:
-                              "inline-block",
-                            width: "14px",
-                            height: "14px",
-                            borderRadius:
-                              "50%",
-                            background:
-                              "#16a34a",
-                            marginRight:
-                              "7px",
-                          }}
-                        />
-
-                        After Treatment
-
-                      </span>
-
-                    </div>
-
-                  </div>
-
-                  {/* SESSION CARDS */}
-
-                  {patientSessions.map(
-                    (session) => (
-
-                      <div
-                        className="patient-card"
-                        key={session.id}
-                        style={{
-                          marginBottom: "15px",
-                          borderLeft:
-                            "4px solid #2563eb",
-                        }}
-                      >
-
-                        <div className="patient-avatar">
-                          📊
-                        </div>
-
-                        <div className="patient-details">
-
-                          <div className="patient-title">
-
-                            <h3>
-                              Session{" "}
-                              {
-                                session.sessionNumber
-                              }
-                            </h3>
-
-                            <span className="patient-id">
-                              {session.id}
-                            </span>
-
-                          </div>
-
-                          <p>
-                            <strong>
-                              Date:
-                            </strong>{" "}
-                            {session.date}
-                          </p>
-
-                          <p>
-                            <strong>
-                              Before Treatment:
-                            </strong>{" "}
-                            {session.beforePainScore}/10
-                          </p>
-
-                          <p>
-                            <strong>
-                              After Treatment:
-                            </strong>{" "}
-                            {session.afterPainScore}/10
-                          </p>
-
-                          <p>
-                            <strong>
-                              Carrier Frequency:
-                            </strong>{" "}
-                            {session.carrierFrequency} Hz
-                          </p>
-
-                          <p>
-                            <strong>
-                              Beat Frequency:
-                            </strong>{" "}
-                            {session.beatFrequency} Hz
-                          </p>
-
-                          <p>
-                            <strong>
-                              Intensity:
-                            </strong>{" "}
-                            {session.intensity} mA
-                          </p>
-
-                          <p>
-                            <strong>
-                              Duration:
-                            </strong>{" "}
-                            {session.duration} minutes
-                          </p>
-
-                          <p>
-                            <strong>
-                              Session Time:
-                            </strong>{" "}
-                            {session.sessionTime}
-                          </p>
-
-                          <p>
-                            <strong>
-                              Source:
-                            </strong>{" "}
-                            {session.recommendationMode ===
-                            "ai"
-                              ? "AI Recommendation"
-                              : "Manual Entry"}
-                          </p>
-
-                          <p>
-                            <strong>
-                              Status:
-                            </strong>{" "}
-                            {session.status}
-                          </p>
-
-                          {session.notes && (
-                            <p>
-                              <strong>
-                                Notes:
-                              </strong>{" "}
-                              {session.notes}
-                            </p>
-                          )}
-
-                        </div>
-
-                      </div>
-
-                    )
-                  )}
-
-                </div>
-              );
-            })
-
-          )}
-
-        </section>
-
-      </div>
-    );
-  }
-
-  /* =====================================================
-     PATIENTS PAGE
-  ===================================================== */
-
-  if (page === "patients") {
-
-    return (
-      <div className="dashboard">
-
-        <header className="dashboard-header">
-
-          <div>
-            <h1>MY IFT</h1>
-            <p>Patients</p>
-          </div>
-
-          <div
-            style={{
-              position: "relative",
-            }}
-          >
-
-            <button
-              className="secondary-button"
-              onClick={() =>
-                setShowUserMenu(
-                  (previous) => !previous
-                )
-              }
-            >
-              👤 {username} ▾
-            </button>
-
-            {showUserMenu && (
-              <div
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  top: "calc(100% + 8px)",
-                  background: "#ffffff",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "10px",
-                  padding: "8px",
-                  minWidth: "180px",
-                  boxShadow:
-                    "0 10px 30px rgba(0,0,0,0.15)",
-                  zIndex: 1000,
-                }}
-              >
-
-                <button
-                  className="secondary-button"
-                  style={{
-                    width: "100%",
-                    marginBottom: "6px",
-                  }}
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    setPage("profile");
-                  }}
-                >
-                  👤 Profile
-                </button>
-
-                <button
-                  className="logout-button"
-                  style={{
-                    width: "100%",
-                  }}
-                  onClick={logout}
-                >
-                  🚪 Logout
-                </button>
-
-              </div>
-            )}
-
-          </div>
-
-        </header>
-
-        <section className="welcome-section">
-
-          <button
-            className="back-button"
-            onClick={() =>
-              setPage("dashboard")
-            }
-          >
-            ← Back to Dashboard
-          </button>
-
-          <h2>Patients</h2>
-
-          <p>
-            Manage your patients and treatment sessions.
-          </p>
-
-        </section>
-
-        <section className="patients-section">
-
-          <div className="section-header">
-
-            <div>
-              <h2>Patient List</h2>
-
-              <p>
-                {patients.length} patient
-                {patients.length !== 1 ? "s" : ""}
-              </p>
-            </div>
-
-            <button
-              className="primary-button"
-              onClick={() =>
-                setPage("add-patient")
-              }
-            >
-              + Add Patient
-            </button>
-
-          </div>
-
-          {patients.length === 0 ? (
-
-            <div className="empty-state">
-
-              <div className="empty-icon">
-                👤
-              </div>
-
-              <h3>
-                No Patients Yet
-              </h3>
-
-              <p>
-                Add your first patient.
-              </p>
-
-              <button
-                className="primary-button"
-                onClick={() =>
-                  setPage("add-patient")
-                }
-              >
-                + Add Patient
-              </button>
-
-            </div>
-
-          ) : (
-
-            <div className="patient-list">
-
-              {patients.map(
-                (patient) => (
-
-                  <div
-                    className="patient-card"
-                    key={patient.id}
-                    onClick={() =>
-                      openTreatment(patient)
-                    }
-                    style={{
-                      cursor: "pointer",
-                    }}
-                  >
-
-                    <div className="patient-avatar">
-                      👤
-                    </div>
-
-                    <div className="patient-details">
-
-                      <div className="patient-title">
-
-                        <h3>
-                          {patient.name}
-                        </h3>
-
-                        <span className="patient-id">
-                          {patient.id}
-                        </span>
-
-                      </div>
-
-                      <div className="patient-info">
-
-                        <span>
-                          Age: {patient.age}
-                        </span>
-
-                        <span>
-                          Gender: {patient.gender}
-                        </span>
-
-                        <span>
-                          Phone: {patient.phone}
-                        </span>
-
-                      </div>
-
-                      <p>
-                        <strong>
-                          Diagnosis:
-                        </strong>{" "}
-                        {patient.diagnosis}
-                      </p>
-
-                      <p>
-                        <strong>
-                          Current Pain Score:
-                        </strong>{" "}
-                        {patient.painScore}/10
-                      </p>
-
-                    </div>
-
-                  </div>
-
-                )
-              )}
-
-            </div>
-
-          )}
-
-        </section>
-
-      </div>
-    );
-  }
-
-  /* =====================================================
-     ADD PATIENT
-  ===================================================== */
-
-  if (page === "add-patient") {
-
-    return (
-      <div className="dashboard">
-
-        <header className="dashboard-header">
-
-          <div>
-            <h1>MY IFT</h1>
-            <p>Add Patient</p>
-          </div>
-
-          <div
-            style={{
-              position: "relative",
-            }}
-          >
-
-            <button
-              className="secondary-button"
-              onClick={() =>
-                setShowUserMenu(
-                  (previous) => !previous
-                )
-              }
-            >
-              👤 {username} ▾
-            </button>
-
-            {showUserMenu && (
-              <div
-                style={{
-                  position: "absolute",
-                  right: 0,
-                  top: "calc(100% + 8px)",
-                  background: "#ffffff",
-                  border: "1px solid #e2e8f0",
-                  borderRadius: "10px",
-                  padding: "8px",
-                  minWidth: "180px",
-                  boxShadow:
-                    "0 10px 30px rgba(0,0,0,0.15)",
-                  zIndex: 1000,
-                }}
-              >
-
-                <button
-                  className="secondary-button"
-                  style={{
-                    width: "100%",
-                    marginBottom: "6px",
-                  }}
-                  onClick={() => {
-                    setShowUserMenu(false);
-                    setPage("profile");
-                  }}
-                >
-                  👤 Profile
-                </button>
-
-                <button
-                  className="logout-button"
-                  style={{
-                    width: "100%",
-                  }}
-                  onClick={logout}
-                >
-                  🚪 Logout
-                </button>
-
-              </div>
-            )}
-
-          </div>
-
-        </header>
-
-        <section className="welcome-section">
-
-          <button
-            className="back-button"
-            onClick={() =>
-              setPage("patients")
-            }
-          >
-            ← Back to Patients
-          </button>
-
-          <h2>Add New Patient</h2>
-
-          <p>
-            Enter the patient's details.
-          </p>
-
-        </section>
-
-        <section className="form-section">
-
-          <div className="form-title">
-
-            <div>
-
-              <h2>
-                Patient Information
-              </h2>
-
-              <p>
-                All information will be saved under
-                username: <strong>{username}</strong>
-              </p>
-
-            </div>
-
-            <div className="form-icon">
-              👤
-            </div>
-
-          </div>
-
-          <form
-            className="patient-form"
-            onSubmit={addPatient}
-          >
-
-            <div className="form-group">
-
-              <label>
-                Patient Name
-              </label>
-
-              <input
-                type="text"
-                name="name"
-                value={patientForm.name}
-                onChange={handlePatientChange}
-                placeholder="Enter patient name"
-                required
-              />
-
-            </div>
-
-            <div className="form-group">
-
-              <label>
-                Age
-              </label>
-
-              <input
-                type="number"
-                name="age"
-                value={patientForm.age}
-                onChange={handlePatientChange}
-                placeholder="Enter age"
-                required
-              />
-
-            </div>
-
-            <div className="form-group">
-
-              <label>
-                Gender
-              </label>
-
-              <select
-                name="gender"
-                value={patientForm.gender}
-                onChange={handlePatientChange}
-                required
-              >
-
-                <option value="">
-                  Select gender
-                </option>
-
-                <option value="Male">
-                  Male
-                </option>
-
-                <option value="Female">
-                  Female
-                </option>
-
-                <option value="Other">
-                  Other
-                </option>
-
-              </select>
-
-            </div>
-
-            <div className="form-group">
-
-              <label>
-                Phone Number
-              </label>
-
-              <input
-                type="tel"
-                name="phone"
-                value={patientForm.phone}
-                onChange={handlePatientChange}
-                placeholder="Enter phone number"
-                required
-              />
-
-            </div>
-
-            <div className="form-group">
-
-              <label>
-                Diagnosis
-              </label>
-
-              <input
-                type="text"
-                name="diagnosis"
-                value={patientForm.diagnosis}
-                onChange={handlePatientChange}
-                placeholder="Enter diagnosis"
-                required
-              />
-
-            </div>
-
-            <div className="form-group">
-
-              <label>
-                Current Pain Score (0–10)
-              </label>
-
-              <input
-                type="number"
-                name="painScore"
-                value={patientForm.painScore}
-                onChange={handlePatientChange}
-                placeholder="Enter score"
-                min="0"
-                max="10"
-                required
-              />
-
-            </div>
-
-            <div className="form-group full-width">
-
-              <label>
-                Notes
-              </label>
-
-              <textarea
-                name="notes"
-                value={patientForm.notes}
-                onChange={handlePatientChange}
-                placeholder="Additional notes..."
-                rows="4"
-              />
-
-            </div>
-
-            <div className="form-actions">
-
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() =>
-                  setPage("patients")
-                }
-              >
-                Cancel
-              </button>
-
-              <button
-                type="submit"
-                className="primary-button"
-              >
-                Save Patient
-              </button>
-
-            </div>
-
-          </form>
-
-        </section>
-
-      </div>
-    );
-  }
-
-  /* =====================================================
-     DASHBOARD
-  ===================================================== */
+  /* =========================================================
+     MAIN APPLICATION
+  ========================================================= */
 
   return (
     <div className="dashboard">
 
+      {/* =====================================================
+          HEADER
+      ===================================================== */}
+
       <header className="dashboard-header">
 
-        <div>
+        <div className="header-brand">
 
-          <h1>
-            MY IFT
-          </h1>
+          <div className="header-logo">
+            ⚡
+          </div>
 
-          <p>
-            Intelligent Interferential Therapy
-          </p>
+          <div>
+            <h1>MY IFT</h1>
+
+            <p>
+              Intelligent Interferential Therapy Platform
+            </p>
+          </div>
 
         </div>
 
-        <div
-          style={{
-            position: "relative",
-          }}
-        >
+        <div className="header-right">
+
+          <div className="system-status">
+            <span className="status-dot"></span>
+            System Ready
+          </div>
 
           <button
-            className="secondary-button"
+            className="username-button"
             onClick={() =>
-              setShowUserMenu(
-                (previous) => !previous
+              setShowProfileMenu(
+                (current) => !current
               )
             }
           >
-            👤 {username} ▾
+
+            <span className="header-avatar">
+              {getInitials(loggedInUser)}
+            </span>
+
+            <span>
+              {loggedInUser}
+            </span>
+
+            <span className="dropdown-arrow">
+              ▾
+            </span>
+
           </button>
-
-          {showUserMenu && (
-            <div
-              style={{
-                position: "absolute",
-                right: 0,
-                top: "calc(100% + 8px)",
-                background: "#ffffff",
-                border: "1px solid #e2e8f0",
-                borderRadius: "10px",
-                padding: "8px",
-                minWidth: "180px",
-                boxShadow:
-                  "0 10px 30px rgba(0,0,0,0.15)",
-                zIndex: 1000,
-              }}
-            >
-
-              <button
-                className="secondary-button"
-                style={{
-                  width: "100%",
-                  marginBottom: "6px",
-                }}
-                onClick={() => {
-                  setShowUserMenu(false);
-                  setPage("profile");
-                }}
-              >
-                👤 Profile
-              </button>
-
-              <button
-                className="logout-button"
-                style={{
-                  width: "100%",
-                }}
-                onClick={logout}
-              >
-                🚪 Logout
-              </button>
-
-            </div>
-          )}
 
         </div>
 
       </header>
 
-      <section className="welcome-section">
+      {/* =====================================================
+          PROFILE DROPDOWN
+      ===================================================== */}
 
-        <h2>
-          MY IFT Dashboard
-        </h2>
+      {showProfileMenu && (
+        <div className="profile-menu">
 
-        <p>
-          Welcome,{" "}
-          <strong>{username}</strong>.
-          Manage your patients and treatment sessions.
-        </p>
+          <div className="profile-menu-top">
 
-      </section>
+            <div className="profile-large-avatar">
+              {getInitials(loggedInUser)}
+            </div>
 
-      <section className="dashboard-grid">
+            <div>
+              <strong>
+                {loggedInUser}
+              </strong>
 
-        <div className="dashboard-card">
+              <span>
+                Therapist / Operator
+              </span>
+            </div>
 
-          <div className="card-icon">
-            👤
           </div>
 
-          <h3>
-            Patients
-          </h3>
+          <div className="profile-divider"></div>
 
-          <p>
-            Manage patient information and treatment records.
-          </p>
+          <div className="profile-last-session">
+
+            <div className="profile-section-label">
+              Previous Session
+            </div>
+
+            {latestSession ? (
+              <>
+
+                <strong>
+                  {latestSession.patientName}
+                </strong>
+
+                <span>
+                  {formatDate(
+                    latestSession.date
+                  )}
+                </span>
+
+                <span>
+                  Pain:{" "}
+                  {latestSession.painBefore}/10
+                  {" → "}
+                  {latestSession.painAfter}/10
+                </span>
+
+                <span>
+                  {latestSession.duration} min
+                  {" • "}
+                  {latestSession.intensity} mA
+                </span>
+
+              </>
+            ) : (
+              <span>
+                No previous session available.
+              </span>
+            )}
+
+          </div>
 
           <button
-            onClick={() =>
-              setPage("patients")
-            }
+            className="profile-menu-button"
+            onClick={() => {
+              setShowSettings(true);
+              setShowProfileMenu(false);
+            }}
           >
-            View Patients
+            ⚙ Settings
+          </button>
+
+          <button
+            className="profile-menu-button logout-menu-button"
+            onClick={handleLogout}
+          >
+            ↪ Logout
           </button>
 
         </div>
+      )}
 
-        <div className="dashboard-card">
+      {/* =====================================================
+          SIDEBAR
+      ===================================================== */}
 
-          <div className="card-icon">
+      <aside className="sidebar">
+
+        <div className="sidebar-brand">
+
+          <div className="sidebar-logo">
             ⚡
           </div>
 
-          <h3>
-            New Treatment
-          </h3>
+          <div>
+            <strong>
+              MY IFT
+            </strong>
 
-          <p>
-            Select a patient and start a new treatment.
-          </p>
+            <span>
+              Clinical Workspace
+            </span>
+          </div>
+
+        </div>
+
+        <nav>
 
           <button
+            className={
+              page === "dashboard"
+                ? "sidebar-button active"
+                : "sidebar-button"
+            }
+            onClick={() =>
+              setPage("dashboard")
+            }
+          >
+            <span>⌂</span>
+            Dashboard
+          </button>
+
+          <button
+            className={
+              page === "patients"
+                ? "sidebar-button active"
+                : "sidebar-button"
+            }
             onClick={() =>
               setPage("patients")
             }
           >
-            Start Treatment
+            <span>♙</span>
+            Manage Patients
           </button>
 
-        </div>
-
-        <div className="dashboard-card">
-
-          <div className="card-icon">
-            📊
-          </div>
-
-          <h3>
-            Session History
-          </h3>
-
-          <p>
-            View every previous treatment session and
-            pain-score progress.
-          </p>
+          <button
+            className={
+              page === "new-session"
+                ? "sidebar-button active"
+                : "sidebar-button"
+            }
+            onClick={() =>
+              setPage("new-session")
+            }
+          >
+            <span>＋</span>
+            New Session
+          </button>
 
           <button
+            className={
+              page === "history"
+                ? "sidebar-button active"
+                : "sidebar-button"
+            }
             onClick={() =>
               setPage("history")
             }
           >
-            View History
+            <span>▤</span>
+            History
           </button>
 
-        </div>
+        </nav>
 
-        <div className="dashboard-card">
+        <div className="sidebar-bottom">
 
-          <div className="card-icon">
-            🤖
-          </div>
-
-          <h3>
-            AI Recommendation
-          </h3>
-
-          <p>
-            Generate intelligent treatment recommendations.
-          </p>
+          <div className="sidebar-divider"></div>
 
           <button
+            className="sidebar-button"
             onClick={() =>
-              setPage("patients")
+              setShowSettings(true)
             }
           >
-            Open AI Assistant
+            <span>⚙</span>
+            Settings
+          </button>
+
+          <button
+            className="sidebar-button sidebar-logout"
+            onClick={handleLogout}
+          >
+            <span>↪</span>
+            Logout
           </button>
 
         </div>
 
-      </section>
+      </aside>
 
-      <section className="quick-info">
+      {/* =====================================================
+          MAIN CONTENT
+      ===================================================== */}
 
-        <h2>
-          System Overview
-        </h2>
+      <main className="main-content">
 
-        <div className="info-grid">
+        {page === "dashboard" && (
+          <DashboardPage
+            loggedInUser={loggedInUser}
+            patients={patients}
+            sessions={sessions}
+            completedSessions={
+              completedSessions
+            }
+            setPage={setPage}
+          />
+        )}
+
+        {page === "patients" && (
+          <PatientsPage
+            patients={patients}
+            patientForm={patientForm}
+            setPatientForm={
+              setPatientForm
+            }
+            onAddPatient={
+              handleAddPatient
+            }
+            onDeletePatient={
+              handleDeletePatient
+            }
+          />
+        )}
+
+        {page === "new-session" && (
+          <NewSessionPage
+            patients={patients}
+            selectedPatient={
+              selectedPatient
+            }
+            selectedPatientId={
+              selectedPatientId
+            }
+            setSelectedPatientId={
+              setSelectedPatientId
+            }
+
+            xrayFile={xrayFile}
+            reportFile={reportFile}
+
+            xrayPreview={
+              xrayPreview
+            }
+
+            reportPreview={
+              reportPreview
+            }
+
+            handleXrayUpload={
+              handleXrayUpload
+            }
+
+            handleReportUpload={
+              handleReportUpload
+            }
+
+            aiRecommendation={
+              aiRecommendation
+            }
+
+            generateAIRecommendation={
+              generateAIRecommendation
+            }
+
+            applyAIRecommendation={
+              applyAIRecommendation
+            }
+
+            treatmentParameters={
+              treatmentParameters
+            }
+
+            setTreatmentParameters={
+              setTreatmentParameters
+            }
+
+            machineSent={
+              machineSent
+            }
+
+            sendParametersToMachine={
+              sendParametersToMachine
+            }
+
+            sessionStatus={
+              sessionStatus
+            }
+
+            sessionSeconds={
+              sessionSeconds
+            }
+
+            startIFTSession={
+              startIFTSession
+            }
+
+            pauseSession={
+              pauseSession
+            }
+
+            continueSession={
+              continueSession
+            }
+
+            stopSession={
+              stopSession
+            }
+
+            afterPainScore={
+              afterPainScore
+            }
+
+            setAfterPainScore={
+              setAfterPainScore
+            }
+
+            saveCompletedSession={
+              saveCompletedSession
+            }
+
+            resetNewSession={
+              resetNewSession
+            }
+          />
+        )}
+
+        {page === "history" && (
+          <HistoryPage
+            patients={patients}
+            sessions={sessions}
+          />
+        )}
+
+      </main>
+
+      {/* =====================================================
+          SAFETY POPUP
+      ===================================================== */}
+
+      {showSafetyWarning && (
+        <SafetyPopup
+          onCancel={() =>
+            setShowSafetyWarning(false)
+          }
+          onConfirm={
+            confirmSafetyAndStart
+          }
+        />
+      )}
+
+      {/* =====================================================
+          SETTINGS
+      ===================================================== */}
+
+      {showSettings && (
+        <SettingsModal
+          username={loggedInUser}
+          onClose={() =>
+            setShowSettings(false)
+          }
+        />
+      )}
+
+    </div>
+  );
+}
+
+/* =========================================================
+   LOGIN SCREEN
+========================================================= */
+
+function LoginScreen({ onLogin }) {
+  const [username, setUsername] =
+    useState("");
+
+  const [password, setPassword] =
+    useState("");
+
+  const submit = (e) => {
+    e.preventDefault();
+
+    onLogin(
+      username,
+      password
+    );
+  };
+
+  return (
+    <div className="login-page">
+
+      <div className="login-card">
+
+        <div className="logo-circle">
+          ⚡
+        </div>
+
+        <h1>
+          MY IFT
+        </h1>
+
+        <p className="subtitle">
+          Intelligent Interferential Therapy Platform
+        </p>
+
+        <form onSubmit={submit}>
+
+          <label>
+            Username
+          </label>
+
+          <input
+            type="text"
+            value={username}
+            onChange={(e) =>
+              setUsername(
+                e.target.value
+              )
+            }
+            placeholder="Enter username"
+          />
+
+          <label>
+            Password
+          </label>
+
+          <input
+            type="password"
+            value={password}
+            onChange={(e) =>
+              setPassword(
+                e.target.value
+              )
+            }
+            placeholder="Enter password"
+          />
+
+          <button type="submit">
+            Sign In
+          </button>
+
+        </form>
+
+        <p className="login-note">
+          Frontend demonstration workspace
+        </p>
+
+      </div>
+
+    </div>
+  );
+}
+
+/* =========================================================
+   DASHBOARD
+========================================================= */
+
+function DashboardPage({
+  loggedInUser,
+  patients,
+  sessions,
+  completedSessions,
+  setPage,
+}) {
+  return (
+    <div className="page-wrapper">
+
+      <div className="page-heading">
+
+        <div>
+
+          <h2>
+            Good afternoon,{" "}
+            {loggedInUser}
+          </h2>
+
+          <p>
+            Manage patients, configure treatment
+            sessions and review treatment history.
+          </p>
+
+        </div>
+
+        <div className="page-badge">
+          Treatment Workspace
+        </div>
+
+      </div>
+
+      {/* STATS */}
+
+      <div className="stats-grid">
+
+        <StatCard
+          title="Patients"
+          value={patients.length}
+          description="Registered patients"
+          icon="♙"
+        />
+
+        <StatCard
+          title="Sessions"
+          value={sessions.length}
+          description="Total treatment sessions"
+          icon="▤"
+        />
+
+        <StatCard
+          title="Completed"
+          value={
+            completedSessions.length
+          }
+          description="Completed sessions"
+          icon="✓"
+        />
+
+        <StatCard
+          title="AI Ready"
+          value="READY"
+          description="Recommendation module"
+          icon="✦"
+        />
+
+      </div>
+
+      {/* ACTION CARDS */}
+
+      <div className="dashboard-actions">
+
+        <ActionCard
+          icon="♙"
+          title="Patient Management"
+          description="Add new patients or remove existing patient records."
+          button="Manage Patients"
+          onClick={() =>
+            setPage("patients")
+          }
+        />
+
+        <ActionCard
+          icon="＋"
+          title="New Treatment"
+          description="Select a patient, review files and configure IFT parameters."
+          button="Start New Session"
+          onClick={() =>
+            setPage("new-session")
+          }
+        />
+
+        <ActionCard
+          icon="▥"
+          title="Session History"
+          description="Review every patient's previous treatment sessions and pain trends."
+          button="View History"
+          onClick={() =>
+            setPage("history")
+          }
+        />
+
+        <ActionCard
+          icon="✦"
+          title="AI Recommendation"
+          description="Generate treatment parameter suggestions from available patient information."
+          button="Open Treatment"
+          onClick={() =>
+            setPage("new-session")
+          }
+        />
+
+      </div>
+
+      {/* SYSTEM OVERVIEW */}
+
+      <section className="dashboard-panel">
+
+        <div className="panel-heading">
 
           <div>
 
+            <h3>
+              System Overview
+            </h3>
+
+            <p>
+              Current workspace information
+            </p>
+
+          </div>
+
+        </div>
+
+        <div className="overview-grid">
+
+          <div>
             <strong>
               {patients.length}
             </strong>
@@ -3391,35 +1377,42 @@ console.log(
             <span>
               Active Patients
             </span>
-
           </div>
 
           <div>
-
             <strong>
-              {sessionHistory.length}
+              {sessions.length}
             </strong>
 
             <span>
               Total Sessions
             </span>
-
           </div>
 
           <div>
 
             <strong>
-              {
-                sessionHistory.filter(
-                  (session) =>
-                    session.status ===
-                    "completed"
-                ).length
-              }
+              {patients.length
+                ? Math.round(
+                    patients.reduce(
+                      (
+                        sum,
+                        patient
+                      ) =>
+                        sum +
+                        Number(
+                          patient.painScore ||
+                            0
+                        ),
+                      0
+                    ) /
+                      patients.length
+                  )
+                : 0}
             </strong>
 
             <span>
-              Completed Sessions
+              Average Pain Score
             </span>
 
           </div>
@@ -3427,11 +1420,11 @@ console.log(
           <div>
 
             <strong>
-              AI
+              Online
             </strong>
 
             <span>
-              Recommendation Engine
+              Machine Status
             </span>
 
           </div>
@@ -3443,5 +1436,2135 @@ console.log(
     </div>
   );
 }
+
+/* =========================================================
+   STAT CARD
+========================================================= */
+
+function StatCard({
+  title,
+  value,
+  description,
+  icon,
+}) {
+  return (
+    <div className="stat-card">
+
+      <div className="stat-icon">
+        {icon}
+      </div>
+
+      <div>
+
+        <span className="stat-title">
+          {title}
+        </span>
+
+        <strong className="stat-value">
+          {value}
+        </strong>
+
+        <span className="stat-description">
+          {description}
+        </span>
+
+      </div>
+
+    </div>
+  );
+}
+
+/* =========================================================
+   ACTION CARD
+========================================================= */
+
+function ActionCard({
+  icon,
+  title,
+  description,
+  button,
+  onClick,
+}) {
+  return (
+    <div className="action-card">
+
+      <div className="action-icon">
+        {icon}
+      </div>
+
+      <h3>
+        {title}
+      </h3>
+
+      <p>
+        {description}
+      </p>
+
+      <button
+        className="primary-button"
+        onClick={onClick}
+      >
+        {button}
+      </button>
+
+    </div>
+  );
+}
+
+/* =========================================================
+   MANAGE PATIENTS PAGE
+========================================================= */
+
+function PatientsPage({
+  patients,
+  patientForm,
+  setPatientForm,
+  onAddPatient,
+  onDeletePatient,
+}) {
+  return (
+    <div className="page-wrapper">
+
+      {/* PAGE HEADER */}
+
+      <div className="page-heading">
+
+        <div>
+
+          <h2>
+            Manage Patients
+          </h2>
+
+          <p>
+            Add new patients or remove existing
+            patient records.
+          </p>
+
+        </div>
+
+        <div className="page-badge">
+          Patient Management
+        </div>
+
+      </div>
+
+      {/* =====================================================
+          ADD PATIENT
+      ===================================================== */}
+
+      <section className="content-panel patients-add-panel">
+
+        <div className="panel-heading">
+
+          <div>
+
+            <h3>
+              Add Patient
+            </h3>
+
+            <p>
+              Create a new patient record.
+            </p>
+
+          </div>
+
+          <div className="panel-number">
+            +
+          </div>
+
+        </div>
+
+        <form
+          className="patient-form-new"
+          onSubmit={onAddPatient}
+        >
+
+          {/* NAME */}
+
+          <div className="form-group">
+
+            <label>
+              Patient Name
+            </label>
+
+            <input
+              value={patientForm.name}
+              onChange={(e) =>
+                setPatientForm({
+                  ...patientForm,
+                  name: e.target.value,
+                })
+              }
+              placeholder="Enter patient name"
+            />
+
+          </div>
+
+          {/* AGE */}
+
+          <div className="form-group">
+
+            <label>
+              Age
+            </label>
+
+            <input
+              type="number"
+              min="0"
+              value={patientForm.age}
+              onChange={(e) =>
+                setPatientForm({
+                  ...patientForm,
+                  age: e.target.value,
+                })
+              }
+              placeholder="Age"
+            />
+
+          </div>
+
+          {/* GENDER */}
+
+          <div className="form-group">
+
+            <label>
+              Gender
+            </label>
+
+            <select
+              value={patientForm.gender}
+              onChange={(e) =>
+                setPatientForm({
+                  ...patientForm,
+                  gender: e.target.value,
+                })
+              }
+            >
+
+              <option value="">
+                Select gender
+              </option>
+
+              <option value="Male">
+                Male
+              </option>
+
+              <option value="Female">
+                Female
+              </option>
+
+              <option value="Other">
+                Other
+              </option>
+
+            </select>
+
+          </div>
+
+          {/* PHONE */}
+
+          <div className="form-group">
+
+            <label>
+              Phone
+            </label>
+
+            <input
+              value={patientForm.phone}
+              onChange={(e) =>
+                setPatientForm({
+                  ...patientForm,
+                  phone: e.target.value,
+                })
+              }
+              placeholder="Phone number"
+            />
+
+          </div>
+
+          {/* DIAGNOSIS */}
+
+          <div className="form-group">
+
+            <label>
+              Diagnosis
+            </label>
+
+            <input
+              value={
+                patientForm.diagnosis
+              }
+              onChange={(e) =>
+                setPatientForm({
+                  ...patientForm,
+                  diagnosis:
+                    e.target.value,
+                })
+              }
+              placeholder="Diagnosis / condition"
+            />
+
+          </div>
+
+          {/* PAIN SCORE */}
+
+          <div className="form-group">
+
+            <label>
+              Initial Pain Score (0–10)
+            </label>
+
+            <input
+              type="number"
+              min="0"
+              max="10"
+              value={
+                patientForm.painScore
+              }
+              onChange={(e) =>
+                setPatientForm({
+                  ...patientForm,
+                  painScore:
+                    e.target.value,
+                })
+              }
+              placeholder="0–10"
+            />
+
+          </div>
+
+          {/* NOTES */}
+
+          <div className="form-group form-full">
+
+            <label>
+              Notes
+            </label>
+
+            <textarea
+              value={
+                patientForm.notes
+              }
+              onChange={(e) =>
+                setPatientForm({
+                  ...patientForm,
+                  notes:
+                    e.target.value,
+                })
+              }
+              placeholder="Additional patient notes"
+            />
+
+          </div>
+
+          {/* BUTTON */}
+
+          <div className="form-actions-new">
+
+            <button
+              type="submit"
+              className="primary-button"
+            >
+              + Add Patient
+            </button>
+
+          </div>
+
+        </form>
+
+      </section>
+
+      {/* =====================================================
+          PATIENTS LIST — BELOW ADD PATIENT
+      ===================================================== */}
+
+      <section className="content-panel patients-list-panel">
+
+        <div className="panel-heading">
+
+          <div>
+
+            <h3>
+              Patients
+            </h3>
+
+            <p>
+              {patients.length} patient
+              {patients.length === 1
+                ? ""
+                : "s"}{" "}
+              registered
+            </p>
+
+          </div>
+
+          <div className="patients-count-badge">
+            {patients.length}
+          </div>
+
+        </div>
+
+        {patients.length === 0 ? (
+
+          <div className="empty-state-new">
+
+            <div className="empty-state-icon">
+              ♙
+            </div>
+
+            <h3>
+              No patients yet
+            </h3>
+
+            <p>
+              Add a patient using the form above.
+            </p>
+
+          </div>
+
+        ) : (
+
+          <div className="patient-list-new">
+
+            {patients.map(
+              (patient) => (
+
+                <div
+                  className="patient-row"
+                  key={patient.id}
+                >
+
+                  {/* AVATAR */}
+
+                  <div className="patient-row-avatar">
+                    {getInitials(
+                      patient.name
+                    )}
+                  </div>
+
+                  {/* INFO */}
+
+                  <div className="patient-row-info">
+
+                    <div className="patient-row-title">
+
+                      <strong>
+                        {patient.name}
+                      </strong>
+
+                      <span>
+                        {patient.id}
+                      </span>
+
+                    </div>
+
+                    <p>
+
+                      {patient.age} years
+
+                      {patient.gender
+                        ? ` • ${patient.gender}`
+                        : ""}
+
+                      {patient.diagnosis
+                        ? ` • ${patient.diagnosis}`
+                        : ""}
+
+                    </p>
+
+                    <small>
+
+                      Pain score:{" "}
+
+                      {patient.painScore !== ""
+                        ? `${patient.painScore}/10`
+                        : "Not recorded"}
+
+                    </small>
+
+                  </div>
+
+                  {/* REMOVE */}
+
+                  <button
+                    type="button"
+                    className="delete-button"
+                    onClick={() =>
+                      onDeletePatient(
+                        patient.id
+                      )
+                    }
+                  >
+                    Remove
+                  </button>
+
+                </div>
+
+              )
+            )}
+
+          </div>
+
+        )}
+
+      </section>
+
+    </div>
+  );
+}
+
+/* =========================================================
+   NEW SESSION PAGE
+========================================================= */
+
+function NewSessionPage({
+  patients,
+  selectedPatient,
+  selectedPatientId,
+  setSelectedPatientId,
+
+  xrayFile,
+  reportFile,
+
+  xrayPreview,
+  reportPreview,
+
+  handleXrayUpload,
+  handleReportUpload,
+
+  aiRecommendation,
+  generateAIRecommendation,
+  applyAIRecommendation,
+
+  treatmentParameters,
+  setTreatmentParameters,
+
+  machineSent,
+  sendParametersToMachine,
+
+  sessionStatus,
+  sessionSeconds,
+
+  startIFTSession,
+  pauseSession,
+  continueSession,
+  stopSession,
+
+  afterPainScore,
+  setAfterPainScore,
+
+  saveCompletedSession,
+
+  resetNewSession,
+}) {
+  return (
+    <div className="page-wrapper">
+
+      <div className="page-heading">
+
+        <div>
+
+          <h2>
+            New Treatment Session
+          </h2>
+
+          <p>
+            Select a patient, review supporting
+            files and configure IFT treatment
+            parameters.
+          </p>
+
+        </div>
+
+        <div className="page-badge">
+          Treatment Workspace
+        </div>
+
+      </div>
+
+      {/* =====================================================
+          FIVE STEP WORKFLOW
+      ===================================================== */}
+
+      <div className="treatment-workflow">
+
+        {/* ===================================================
+            STEP 1
+        =================================================== */}
+
+        <section className="workflow-card">
+
+          <WorkflowHeader
+            number="1"
+            title="Select Patient"
+            description="Choose the patient for this treatment."
+          />
+
+          <select
+            className="workflow-select"
+            value={selectedPatientId}
+            onChange={(e) =>
+              setSelectedPatientId(
+                e.target.value
+              )
+            }
+          >
+
+            <option value="">
+              Select patient
+            </option>
+
+            {patients.map(
+              (patient) => (
+                <option
+                  value={patient.id}
+                  key={patient.id}
+                >
+                  {patient.name} —{" "}
+                  {patient.id}
+                </option>
+              )
+            )}
+
+          </select>
+
+          {selectedPatient ? (
+
+            <div className="selected-patient-card">
+
+              <div className="selected-patient-avatar">
+                {getInitials(
+                  selectedPatient.name
+                )}
+              </div>
+
+              <div>
+
+                <strong>
+                  {selectedPatient.name}
+                </strong>
+
+                <span>
+                  {selectedPatient.age} years
+
+                  {selectedPatient.gender
+                    ? ` • ${selectedPatient.gender}`
+                    : ""}
+                </span>
+
+              </div>
+
+              <div className="pain-badge">
+                Pain{" "}
+                {selectedPatient.painScore ||
+                  0}
+                /10
+              </div>
+
+            </div>
+
+          ) : (
+
+            <div className="workflow-empty">
+              Select a patient to continue.
+            </div>
+
+          )}
+
+        </section>
+
+        {/* ===================================================
+            STEP 2
+        =================================================== */}
+
+        <section className="workflow-card">
+
+          <WorkflowHeader
+            number="2"
+            title="Reports & Imaging"
+            description="Upload supporting patient files."
+          />
+
+          <div className="upload-stack">
+
+            <label className="upload-box-small">
+
+              <input
+                type="file"
+                accept="image/*"
+                onChange={
+                  handleXrayUpload
+                }
+              />
+
+              <div className="upload-small-icon">
+                ◉
+              </div>
+
+              <div>
+
+                <strong>
+                  X-ray Image
+                </strong>
+
+                <span>
+                  {xrayFile
+                    ? xrayFile.name
+                    : "Click to upload"}
+                </span>
+
+              </div>
+
+              {xrayPreview && (
+                <img
+                  src={xrayPreview}
+                  alt="X-ray preview"
+                  className="mini-preview"
+                />
+              )}
+
+            </label>
+
+            <label className="upload-box-small">
+
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                onChange={
+                  handleReportUpload
+                }
+              />
+
+              <div className="upload-small-icon">
+                ▤
+              </div>
+
+              <div>
+
+                <strong>
+                  Medical Report
+                </strong>
+
+                <span>
+                  {reportFile
+                    ? reportFile.name
+                    : "Click to upload"}
+                </span>
+
+              </div>
+
+              {reportPreview && (
+                <img
+                  src={reportPreview}
+                  alt="Report preview"
+                  className="mini-preview"
+                />
+              )}
+
+            </label>
+
+          </div>
+
+          <div className="upload-help">
+            Files are used as supporting
+            information for the treatment workflow.
+          </div>
+
+        </section>
+
+        {/* ===================================================
+            STEP 3
+        =================================================== */}
+
+        <section className="workflow-card">
+
+          <WorkflowHeader
+            number="3"
+            title="AI Recommendation"
+            description="Generate suggested parameters."
+          />
+
+          <button
+            className="ai-generate-button"
+            onClick={
+              generateAIRecommendation
+            }
+            disabled={!selectedPatient}
+          >
+            ✦ Generate AI Recommendation
+          </button>
+
+          {!aiRecommendation ? (
+
+            <div className="ai-empty">
+
+              <span>
+                ✦
+              </span>
+
+              <div>
+
+                <strong>
+                  No recommendation generated
+                </strong>
+
+                <p>
+                  Select a patient and generate
+                  a recommendation.
+                </p>
+
+              </div>
+
+            </div>
+
+          ) : (
+
+            <div className="ai-result-new">
+
+              <div className="ai-result-title">
+
+                <span>
+                  ✦
+                </span>
+
+                <strong>
+                  Suggested Parameters
+                </strong>
+
+              </div>
+
+              <div className="ai-values">
+
+                <div>
+
+                  <span>
+                    Carrier
+                  </span>
+
+                  <strong>
+                    {
+                      aiRecommendation.carrierFrequency
+                    }{" "}
+                    Hz
+                  </strong>
+
+                </div>
+
+                <div>
+
+                  <span>
+                    Beat
+                  </span>
+
+                  <strong>
+                    {
+                      aiRecommendation.beatFrequency
+                    }{" "}
+                    Hz
+                  </strong>
+
+                </div>
+
+                <div>
+
+                  <span>
+                    Current
+                  </span>
+
+                  <strong>
+                    {
+                      aiRecommendation.intensity
+                    }{" "}
+                    mA
+                  </strong>
+
+                </div>
+
+                <div>
+
+                  <span>
+                    Duration
+                  </span>
+
+                  <strong>
+                    {
+                      aiRecommendation.duration
+                    }{" "}
+                    min
+                  </strong>
+
+                </div>
+
+              </div>
+
+              <p className="ai-disclaimer">
+                {
+                  aiRecommendation.reason
+                }
+              </p>
+
+              <button
+                className="secondary-button full-button"
+                onClick={
+                  applyAIRecommendation
+                }
+              >
+                Apply Recommendation
+              </button>
+
+            </div>
+
+          )}
+
+        </section>
+
+        {/* ===================================================
+            STEP 4
+        =================================================== */}
+
+        <section className="workflow-card">
+
+          <WorkflowHeader
+            number="4"
+            title="Treatment Parameters"
+            description="Review or manually adjust parameters."
+          />
+
+          <div className="parameter-fields">
+
+            <div className="parameter-field">
+
+              <label>
+                Carrier Frequency
+              </label>
+
+              <input
+                type="number"
+                value={
+                  treatmentParameters.carrierFrequency
+                }
+                onChange={(e) =>
+                  setTreatmentParameters({
+                    ...treatmentParameters,
+                    carrierFrequency:
+                      e.target.value,
+                  })
+                }
+              />
+
+              <span>
+                Hz
+              </span>
+
+            </div>
+
+            <div className="parameter-field">
+
+              <label>
+                Beat Frequency
+              </label>
+
+              <input
+                type="number"
+                value={
+                  treatmentParameters.beatFrequency
+                }
+                onChange={(e) =>
+                  setTreatmentParameters({
+                    ...treatmentParameters,
+                    beatFrequency:
+                      e.target.value,
+                  })
+                }
+              />
+
+              <span>
+                Hz
+              </span>
+
+            </div>
+
+            <div className="parameter-field">
+
+              <label>
+                Current / Intensity (mA)
+              </label>
+
+              <input
+                type="number"
+                min="0"
+                step="0.1"
+                value={
+                  treatmentParameters.intensity
+                }
+                onChange={(e) =>
+                  setTreatmentParameters({
+                    ...treatmentParameters,
+                    intensity:
+                      e.target.value,
+                  })
+                }
+                placeholder="Enter current"
+              />
+
+              <span>
+                mA
+              </span>
+
+            </div>
+
+            <div className="parameter-field">
+
+              <label>
+                Duration
+              </label>
+
+              <input
+                type="number"
+                min="0.1"
+                step="0.1"
+                value={
+                  treatmentParameters.duration
+                }
+                onChange={(e) =>
+                  setTreatmentParameters({
+                    ...treatmentParameters,
+                    duration:
+                      e.target.value,
+                  })
+                }
+              />
+
+              <span>
+                min
+              </span>
+
+            </div>
+
+          </div>
+
+          <div className="parameter-field-full">
+
+            <label>
+              Treatment Notes
+            </label>
+
+            <textarea
+              value={
+                treatmentParameters.notes
+              }
+              onChange={(e) =>
+                setTreatmentParameters({
+                  ...treatmentParameters,
+                  notes: e.target.value,
+                })
+              }
+              placeholder="Enter treatment notes..."
+            />
+
+          </div>
+
+          <button
+            className={
+              machineSent
+                ? "machine-button sent"
+                : "machine-button"
+            }
+            onClick={
+              sendParametersToMachine
+            }
+          >
+
+            {machineSent
+              ? "✓ Parameters Ready"
+              : "↗ Send Parameters to Machine"}
+
+          </button>
+
+        </section>
+
+        {/* ===================================================
+            STEP 5
+        =================================================== */}
+
+        <section className="workflow-card session-workflow-card">
+
+          <WorkflowHeader
+            number="5"
+            title="IFT Session"
+            description="Start and control the treatment session."
+          />
+
+          <div className="session-area">
+
+            {sessionStatus === "idle" && (
+              <>
+
+                <div className="session-icon">
+                  ⚡
+                </div>
+
+                <strong>
+                  Ready to Start
+                </strong>
+
+                <p>
+                  Confirm the safety screening and
+                  begin the IFT treatment.
+                </p>
+
+                <button
+                  className="start-session-button"
+                  onClick={
+                    startIFTSession
+                  }
+                >
+                  Start IFT Session
+                </button>
+
+              </>
+            )}
+
+            {(sessionStatus ===
+              "running" ||
+              sessionStatus ===
+                "paused") && (
+              <>
+
+                <div
+                  className={
+                    sessionStatus ===
+                    "paused"
+                      ? "session-status paused"
+                      : "session-status running"
+                  }
+                >
+                  {sessionStatus ===
+                  "running"
+                    ? "● Treatment Running"
+                    : "Ⅱ Treatment Paused"}
+                </div>
+
+                <div className="session-timer-small">
+                  {formatDuration(
+                    sessionSeconds
+                  )}
+                </div>
+
+                <div className="session-controls">
+
+                  <button
+                    className="secondary-button"
+                    onClick={
+                      pauseSession
+                    }
+                    disabled={
+                      sessionStatus !==
+                      "running"
+                    }
+                  >
+                    Pause
+                  </button>
+
+                  <button
+                    className="primary-button"
+                    onClick={
+                      continueSession
+                    }
+                    disabled={
+                      sessionStatus !==
+                      "paused"
+                    }
+                  >
+                    Continue
+                  </button>
+
+                  <button
+                    className="danger-button"
+                    onClick={
+                      stopSession
+                    }
+                  >
+                    Stop
+                  </button>
+
+                </div>
+
+              </>
+            )}
+
+            {sessionStatus ===
+              "completed" && (
+              <>
+
+                <div className="session-icon completed">
+                  ✓
+                </div>
+
+                <strong>
+                  Session Completed
+                </strong>
+
+                <p>
+                  Treatment duration has been completed.
+                </p>
+
+                <div className="after-pain-box-new">
+
+                  <label>
+                    Post-Treatment Pain Score (0–10)
+                  </label>
+
+                  <input
+                    type="number"
+                    min="0"
+                    max="10"
+                    value={
+                      afterPainScore
+                    }
+                    onChange={(e) =>
+                      setAfterPainScore(
+                        e.target.value
+                      )
+                    }
+                    placeholder="Enter pain score"
+                  />
+
+                  <button
+                    className="primary-button"
+                    onClick={
+                      saveCompletedSession
+                    }
+                  >
+                    Save Session
+                  </button>
+
+                </div>
+
+              </>
+            )}
+
+            {sessionStatus ===
+              "stopped" && (
+              <>
+
+                <div className="session-icon stopped">
+                  !
+                </div>
+
+                <strong>
+                  Session Stopped
+                </strong>
+
+                <p>
+                  The treatment session was stopped.
+                </p>
+
+                <button
+                  className="secondary-button"
+                  onClick={
+                    resetNewSession
+                  }
+                >
+                  Reset Session
+                </button>
+
+              </>
+            )}
+
+          </div>
+
+        </section>
+
+      </div>
+
+    </div>
+  );
+}
+
+/* =========================================================
+   WORKFLOW HEADER
+========================================================= */
+
+function WorkflowHeader({
+  number,
+  title,
+  description,
+}) {
+  return (
+    <div className="workflow-header">
+
+      <div className="workflow-number">
+        {number}
+      </div>
+
+      <div>
+
+        <h3>
+          {title}
+        </h3>
+
+        <p>
+          {description}
+        </p>
+
+      </div>
+
+    </div>
+  );
+}
+
+/* =========================================================
+   HISTORY PAGE
+========================================================= */
+
+function HistoryPage({
+  patients,
+  sessions,
+}) {
+  return (
+    <div className="page-wrapper">
+
+      <div className="page-heading">
+
+        <div>
+
+          <h2>
+            Session History
+          </h2>
+
+          <p>
+            Review all previous IFT sessions and
+            pain trends for every patient.
+          </p>
+
+        </div>
+
+        <div className="page-badge">
+          Clinical History
+        </div>
+
+      </div>
+
+      {patients.length === 0 ? (
+
+        <div className="content-panel">
+
+          <div className="empty-state-new">
+
+            <div>
+              ▤
+            </div>
+
+            <h3>
+              No patient history available
+            </h3>
+
+            <p>
+              Add patients and complete treatment
+              sessions to see history here.
+            </p>
+
+          </div>
+
+        </div>
+
+      ) : (
+
+        <div className="history-patient-list">
+
+          {patients.map(
+            (patient) => {
+
+              const patientSessions =
+                sessions
+                  .filter(
+                    (session) =>
+                      session.patientId ===
+                      patient.id
+                  )
+                  .sort(
+                    (a, b) =>
+                      new Date(a.date) -
+                      new Date(b.date)
+                  );
+
+              return (
+                <PatientHistoryCard
+                  key={patient.id}
+                  patient={patient}
+                  sessions={
+                    patientSessions
+                  }
+                />
+              );
+            }
+          )}
+
+        </div>
+
+      )}
+
+    </div>
+  );
+}
+
+/* =========================================================
+   PATIENT HISTORY CARD
+========================================================= */
+
+function PatientHistoryCard({
+  patient,
+  sessions,
+}) {
+  return (
+    <section className="history-patient-card">
+
+      <div className="history-patient-header">
+
+        <div className="history-patient-main">
+
+          <div className="history-avatar">
+            {getInitials(
+              patient.name
+            )}
+          </div>
+
+          <div>
+
+            <h3>
+              {patient.name}
+            </h3>
+
+            <p>
+
+              {patient.id}
+              {" • "}
+              {patient.age} years
+
+              {patient.gender
+                ? ` • ${patient.gender}`
+                : ""}
+
+            </p>
+
+            {patient.diagnosis && (
+              <span>
+                {patient.diagnosis}
+              </span>
+            )}
+
+          </div>
+
+        </div>
+
+        <div className="history-count">
+
+          <strong>
+            {sessions.length}
+          </strong>
+
+          <span>
+            Sessions
+          </span>
+
+        </div>
+
+      </div>
+
+      {sessions.length === 0 ? (
+
+        <div className="history-no-sessions">
+          No previous sessions for this patient.
+        </div>
+
+      ) : (
+
+        <>
+
+          {/* GRAPH */}
+
+          <div className="history-graph-section">
+
+            <div className="history-section-title">
+
+              <div>
+
+                <h4>
+                  Pain Score Trend
+                </h4>
+
+                <p>
+                  Before and after treatment
+                </p>
+
+              </div>
+
+              <div className="graph-legend">
+
+                <span>
+                  <i></i>
+                  Before
+                </span>
+
+                <span>
+                  <i></i>
+                  After
+                </span>
+
+              </div>
+
+            </div>
+
+            <PainGraph
+              sessions={sessions}
+            />
+
+          </div>
+
+          {/* TABLE */}
+
+          <div className="session-history-section">
+
+            <div className="history-section-title">
+
+              <div>
+
+                <h4>
+                  Previous Sessions
+                </h4>
+
+                <p>
+                  Complete treatment history
+                </p>
+
+              </div>
+
+            </div>
+
+            <div className="history-table-wrapper">
+
+              <table className="history-table-new">
+
+                <thead>
+
+                  <tr>
+
+                    <th>
+                      Session
+                    </th>
+
+                    <th>
+                      Date
+                    </th>
+
+                    <th>
+                      Pain Before
+                    </th>
+
+                    <th>
+                      Pain After
+                    </th>
+
+                    <th>
+                      Carrier
+                    </th>
+
+                    <th>
+                      Beat
+                    </th>
+
+                    <th>
+                      Current
+                    </th>
+
+                    <th>
+                      Duration
+                    </th>
+
+                    <th>
+                      Status
+                    </th>
+
+                  </tr>
+
+                </thead>
+
+                <tbody>
+
+                  {sessions.map(
+                    (
+                      session,
+                      index
+                    ) => (
+
+                      <tr
+                        key={
+                          session.id
+                        }
+                      >
+
+                        <td>
+
+                          <strong>
+                            Session{" "}
+                            {index + 1}
+                          </strong>
+
+                        </td>
+
+                        <td>
+
+                          {formatDate(
+                            session.date
+                          )}
+
+                          <small>
+                            {formatTime(
+                              session.date
+                            )}
+                          </small>
+
+                        </td>
+
+                        <td>
+
+                          <span className="pain-value before">
+                            {
+                              session.painBefore
+                            }
+                            /10
+                          </span>
+
+                        </td>
+
+                        <td>
+
+                          <span className="pain-value after">
+                            {
+                              session.painAfter
+                            }
+                            /10
+                          </span>
+
+                        </td>
+
+                        <td>
+                          {
+                            session.carrierFrequency
+                          }{" "}
+                          Hz
+                        </td>
+
+                        <td>
+                          {
+                            session.beatFrequency
+                          }{" "}
+                          Hz
+                        </td>
+
+                        <td>
+                          {
+                            session.intensity
+                          }{" "}
+                          mA
+                        </td>
+
+                        <td>
+                          {
+                            session.duration
+                          }{" "}
+                          min
+                        </td>
+
+                        <td>
+
+                          <span className="completed-badge">
+                            ✓ Completed
+                          </span>
+
+                        </td>
+
+                      </tr>
+
+                    )
+                  )}
+
+                </tbody>
+
+              </table>
+
+            </div>
+
+          </div>
+
+        </>
+
+      )}
+
+    </section>
+  );
+}
+
+/* =========================================================
+   PAIN GRAPH
+========================================================= */
+
+function PainGraph({
+  sessions,
+}) {
+  const width = 700;
+  const height = 240;
+
+  const paddingLeft = 50;
+  const paddingRight = 25;
+  const paddingTop = 25;
+  const paddingBottom = 45;
+
+  const graphWidth =
+    width -
+    paddingLeft -
+    paddingRight;
+
+  const graphHeight =
+    height -
+    paddingTop -
+    paddingBottom;
+
+  const xStep =
+    sessions.length > 1
+      ? graphWidth /
+        (sessions.length - 1)
+      : graphWidth;
+
+  const getX = (index) =>
+    sessions.length === 1
+      ? paddingLeft +
+        graphWidth / 2
+      : paddingLeft +
+        index * xStep;
+
+  const getY = (score) =>
+    paddingTop +
+    graphHeight -
+    (Number(score || 0) / 10) *
+      graphHeight;
+
+  const beforePoints =
+    sessions
+      .map(
+        (
+          session,
+          index
+        ) =>
+          `${getX(index)},${getY(
+            session.painBefore
+          )}`
+      )
+      .join(" ");
+
+  const afterPoints =
+    sessions
+      .map(
+        (
+          session,
+          index
+        ) =>
+          `${getX(index)},${getY(
+            session.painAfter
+          )}`
+      )
+      .join(" ");
+
+  return (
+    <div className="pain-graph">
+
+      <svg
+        viewBox={`0 0 ${width} ${height}`}
+        preserveAspectRatio="none"
+      >
+
+        {/* GRID */}
+
+        {[0, 2, 4, 6, 8, 10].map(
+          (value) => (
+
+            <g key={value}>
+
+              <line
+                x1={paddingLeft}
+                x2={
+                  width -
+                  paddingRight
+                }
+                y1={getY(value)}
+                y2={getY(value)}
+                className="graph-grid-line"
+              />
+
+              <text
+                x={
+                  paddingLeft - 10
+                }
+                y={
+                  getY(value) + 4
+                }
+                textAnchor="end"
+                className="graph-label"
+              >
+                {value}
+              </text>
+
+            </g>
+
+          )
+        )}
+
+        {/* BEFORE */}
+
+        {sessions.length > 1 && (
+          <polyline
+            points={beforePoints}
+            fill="none"
+            className="graph-line-before"
+          />
+        )}
+
+        {/* AFTER */}
+
+        {sessions.length > 1 && (
+          <polyline
+            points={afterPoints}
+            fill="none"
+            className="graph-line-after"
+          />
+        )}
+
+        {/* BEFORE POINTS */}
+
+        {sessions.map(
+          (
+            session,
+            index
+          ) => (
+
+            <circle
+              key={`before-${session.id}`}
+              cx={getX(index)}
+              cy={getY(
+                session.painBefore
+              )}
+              r="4"
+              className="graph-point-before"
+            />
+
+          )
+        )}
+
+        {/* AFTER POINTS */}
+
+        {sessions.map(
+          (
+            session,
+            index
+          ) => (
+
+            <circle
+              key={`after-${session.id}`}
+              cx={getX(index)}
+              cy={getY(
+                session.painAfter
+              )}
+              r="4"
+              className="graph-point-after"
+            />
+
+          )
+        )}
+
+        {/* X LABELS */}
+
+        {sessions.map(
+          (
+            session,
+            index
+          ) => (
+
+            <text
+              key={`label-${session.id}`}
+              x={getX(index)}
+              y={
+                height - 15
+              }
+              textAnchor="middle"
+              className="graph-label"
+            >
+              S{index + 1}
+            </text>
+
+          )
+        )}
+
+      </svg>
+
+    </div>
+  );
+}
+
+/* =========================================================
+   SAFETY POPUP
+========================================================= */
+
+function SafetyPopup({
+  onCancel,
+  onConfirm,
+}) {
+  return (
+    <div className="warning-overlay">
+
+      <div className="warning-popup">
+
+        <div className="warning-header">
+
+          <div className="warning-icon">
+            !
+          </div>
+
+          <div>
+
+            <h2>
+              Safety Screening
+            </h2>
+
+            <p>
+              Consult a qualified clinician before treatment.
+            </p>
+
+          </div>
+
+          <button
+            className="warning-close"
+            onClick={onCancel}
+          >
+            ×
+          </button>
+
+        </div>
+
+        <div className="warning-content">
+
+          <p className="warning-intro">
+            Before starting IFT treatment, confirm
+            that the patient has been appropriately
+            screened.
+          </p>
+
+          <ul>
+
+            <li>
+              Do not use over or near implanted
+              electronic devices unless cleared by
+              an appropriate clinician.
+            </li>
+
+            <li>
+              Do not apply electrodes over areas
+              where treatment is contraindicated.
+            </li>
+
+            <li>
+              Use additional caution where sensation
+              or circulation may be impaired.
+            </li>
+
+            <li>
+              Follow the prescribed clinical protocol
+              and device operating instructions.
+            </li>
+
+            <li>
+              Stop treatment if the patient experiences
+              unusual pain, discomfort or other
+              concerning symptoms.
+            </li>
+
+          </ul>
+
+          <div className="warning-danger">
+
+            <strong>
+              Important:
+            </strong>{" "}
+
+            This application provides a
+            treatment-workflow interface and should
+            not replace professional clinical
+            assessment or the device manufacturer's
+            instructions.
+
+          </div>
+
+          <div className="warning-note">
+
+            <strong>
+              Safety screening — consult a qualified clinician
+            </strong>
+
+            <p>
+              Confirm the treatment is appropriate
+              for this patient before proceeding.
+            </p>
+
+          </div>
+
+        </div>
+
+        <div className="warning-actions">
+
+          <button
+            className="secondary-button"
+            onClick={onCancel}
+          >
+            Cancel
+          </button>
+
+          <button
+            className="primary-button"
+            onClick={onConfirm}
+          >
+            Confirm & Start Session
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
+  );
+}
+
+/* =========================================================
+   SETTINGS
+========================================================= */
+
+function SettingsModal({
+  username,
+  onClose,
+}) {
+  return (
+    <div className="warning-overlay">
+
+      <div className="settings-modal">
+
+        <div className="settings-header">
+
+          <div>
+
+            <h2>
+              Settings
+            </h2>
+
+            <p>
+              Workspace settings
+            </p>
+
+          </div>
+
+          <button
+            className="warning-close"
+            onClick={onClose}
+          >
+            ×
+          </button>
+
+        </div>
+
+        <div className="settings-content">
+
+          <div className="settings-row">
+
+            <div>
+
+              <strong>
+                Account
+              </strong>
+
+              <span>
+                Currently signed in as{" "}
+                {username}
+              </span>
+
+            </div>
+
+          </div>
+
+          <div className="settings-row">
+
+            <div>
+
+              <strong>
+                System Status
+              </strong>
+
+              <span>
+                Frontend workspace ready
+              </span>
+
+            </div>
+
+            <span className="settings-status">
+              Ready
+            </span>
+
+          </div>
+
+          <div className="settings-row">
+
+            <div>
+
+              <strong>
+                Data Storage
+              </strong>
+
+              <span>
+                Session data is currently
+                stored locally in this browser.
+              </span>
+
+            </div>
+
+          </div>
+
+          <div className="settings-info">
+
+            Backend and ESP32 communication can
+            be connected to these existing controls
+            later without changing the treatment
+            workflow.
+
+          </div>
+
+        </div>
+
+        <div className="settings-footer">
+
+          <button
+            className="primary-button"
+            onClick={onClose}
+          >
+            Done
+          </button>
+
+        </div>
+
+      </div>
+
+    </div>
+  );
+}
+
+/* =========================================================
+   EXPORT
+========================================================= */
 
 export default App;
