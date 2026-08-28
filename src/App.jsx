@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import "./App.css";
-
+import {
+  createPatient,
+  getPatients,
+  createSession,
+  getSessions,
+} from "./api";
 const EMPTY_PATIENT_FORM = {
   name: "",
   age: "",
@@ -169,6 +174,168 @@ function App() {
     sessionStatus,
     treatmentParameters.duration,
   ]);
+  
+/* =====================================================
+   LOAD PATIENT SESSIONS FROM BACKEND
+===================================================== */
+
+useEffect(() => {
+  const loadPatientSessions = async () => {
+    if (!selectedPatient?.id) {
+      return;
+    }
+
+    try {
+      const backendSessions = await getSessions(
+        selectedPatient.id
+      );
+
+      console.log(
+        "Sessions loaded from backend:",
+        backendSessions
+      );
+
+      const formattedSessions =
+        backendSessions.map((session, index) => ({
+          id: `S${String(session.id).padStart(3, "0")}`,
+
+          sessionNumber: index + 1,
+
+          username,
+
+          patientId: session.patient_id,
+
+          patientName: selectedPatient.name,
+
+          date: session.date,
+
+          beforePainScore: session.pain_before,
+
+          afterPainScore: session.pain_after,
+
+          carrierFrequency:
+            session.carrier_frequency,
+
+          beatFrequency:
+            session.beat_frequency,
+
+          intensity: session.intensity,
+
+          duration: session.duration,
+
+          notes: session.notes || "",
+
+          recommendationMode: "Backend",
+
+          status: "completed",
+
+          sessionTime: "",
+        }));
+
+      /*
+       * Keep sessions belonging to other patients.
+       * Replace only this patient's sessions.
+       */
+
+      const otherPatientSessions =
+        sessionHistory.filter(
+          (session) =>
+            session.patientId !== selectedPatient.id
+        );
+
+      updateCurrentUserData({
+        sessions: [
+          ...otherPatientSessions,
+          ...formattedSessions,
+        ],
+      });
+
+      console.log(
+        "Sessions updated in frontend:",
+        formattedSessions
+      );
+
+    } catch (error) {
+      console.error(
+        "Could not load sessions:",
+        error
+      );
+    }
+  };
+
+  loadPatientSessions();
+
+}, [selectedPatient?.id]);
+```
+
+
+
+  /* =====================================================
+     YOUR NEXT EXISTING CODE
+  ===================================================== */
+    /* =====================================================
+     LOAD PATIENTS FROM BACKEND
+  ===================================================== */
+
+  ```js
+/* =====================================================
+   LOAD PATIENTS FROM BACKEND
+===================================================== */
+
+useEffect(() => {
+  const loadPatients = async () => {
+    if (!loggedIn || !username) {
+      return;
+    }
+
+    try {
+      const backendPatients = await getPatients();
+
+      console.log(
+        "Patients loaded from backend:",
+        backendPatients
+      );
+
+      const formattedPatients = backendPatients.map(
+        (patient) => {
+          const existingPatient = patients.find(
+            (p) => p.id === patient.patient_id
+          );
+
+          return {
+            id: patient.patient_id,
+            username: username,
+            name: patient.name,
+            age: patient.age,
+            gender: patient.gender,
+
+            // Keep existing frontend information
+            phone:
+              existingPatient?.phone || "",
+            diagnosis:
+              existingPatient?.diagnosis || "",
+            painScore:
+              existingPatient?.painScore ?? "",
+            notes:
+              existingPatient?.notes || "",
+          };
+        }
+      );
+
+      updateCurrentUserData({
+        patients: formattedPatients,
+      });
+
+    } catch (error) {
+      console.error(
+        "Error loading patients from backend:",
+        error
+      );
+    }
+  };
+
+  loadPatients();
+}, [loggedIn, username]);
 
   /* =====================================================
      TIME FORMAT
@@ -219,37 +386,72 @@ function App() {
   };
 
   /* =====================================================
-     ADD PATIENT
-  ===================================================== */
+    const addPatient = async (e) => {
+  e.preventDefault();
 
-  const addPatient = (e) => {
-    e.preventDefault();
+  if (!username) {
+    alert("Please login first.");
+    return;
+  }
 
-    if (!username) {
-      alert("Please login first.");
-      return;
-    }
-
+  try {
     const newPatient = {
-      id: `P${String(patients.length + 1).padStart(3, "0")}`,
-      username,
+      patient_id: `P${String(patients.length + 1).padStart(3, "0")}`,
       name: patientForm.name,
-      age: patientForm.age,
+      age: Number(patientForm.age),
       gender: patientForm.gender,
       phone: patientForm.phone,
       diagnosis: patientForm.diagnosis,
-      painScore: patientForm.painScore,
+      pain_score:
+        patientForm.painScore === ""
+          ? null
+          : Number(patientForm.painScore),
       notes: patientForm.notes,
+    };
+
+    // Send patient to FastAPI backend
+    const savedPatient = await createPatient(newPatient);
+
+    console.log(
+      "Patient saved to backend:",
+      savedPatient
+    );
+
+    // Keep frontend state updated
+    const frontendPatient = {
+      id: savedPatient.patient_id,
+      username,
+      name: savedPatient.name,
+      age: savedPatient.age,
+      gender: savedPatient.gender,
+      phone: savedPatient.phone,
+      diagnosis: savedPatient.diagnosis,
+      painScore: savedPatient.pain_score,
+      notes: savedPatient.notes,
       createdAt: new Date().toLocaleString(),
     };
 
     updateCurrentUserData({
-      patients: [...patients, newPatient],
+      patients: [...patients, frontendPatient],
     });
 
     setPatientForm(EMPTY_PATIENT_FORM);
+
     setPage("patients");
-  };
+
+    alert("Patient added successfully!");
+
+  } catch (error) {
+    console.error(
+      "Error creating patient:",
+      error
+    );
+
+    alert(
+      `Could not save patient: ${error.message}`
+    );
+  }
+};
 
   /* =====================================================
      OPEN TREATMENT
@@ -428,12 +630,62 @@ function App() {
     setSessionStatus("stopped");
     setShowAfterTreatmentPopup(true);
   };
+/* =====================================================
+   ADD PATIENT
+===================================================== */
 
+const addPatient = async (e) => {
+  e.preventDefault();
+
+  if (!username) {
+    alert("Please login first.");
+    return;
+  }
+
+  try {
+    const newPatient = {
+      patient_id: `P${Date.now()}`,
+      name: patientForm.name,
+      age: Number(patientForm.age),
+      gender: patientForm.gender,
+    };
+
+    const savedPatient = await createPatient(newPatient);
+
+    console.log("Patient saved to backend:", savedPatient);
+
+    const frontendPatient = {
+      id: savedPatient.patient_id,
+      username: username,
+      name: savedPatient.name,
+      age: savedPatient.age,
+      gender: savedPatient.gender,
+      phone: patientForm.phone,
+      diagnosis: patientForm.diagnosis,
+      painScore: patientForm.painScore,
+      notes: patientForm.notes,
+      createdAt: new Date().toLocaleString(),
+    };
+
+    updateCurrentUserData({
+      patients: [...patients, frontendPatient],
+    });
+
+    setPatientForm(EMPTY_PATIENT_FORM);
+    setPage("patients");
+
+    alert("Patient added successfully!");
+
+  } catch (error) {
+    console.error("Error creating patient:", error);
+    alert(`Could not save patient: ${error.message}`);
+  }
+};
   /* =====================================================
      SAVE SESSION
   ===================================================== */
 
-  const saveSession = () => {
+  const saveSession = async () => {
     if (!selectedPatient) return;
 
     if (afterPainScore === "") {
@@ -449,7 +701,59 @@ function App() {
     );
 
     const sessionNumber = patientSessions.length + 1;
+    const backendSession = {
+  patient_id: selectedPatient.id,
 
+  condition:
+    selectedPatient.diagnosis || "",
+
+  severity: "",
+
+  pain_before:
+    selectedPatient.painScore === ""
+      ? null
+      : Number(selectedPatient.painScore),
+
+  pain_after:
+    afterPainScore === ""
+      ? null
+      : Number(afterPainScore),
+
+  carrier_frequency:
+    treatmentParameters.carrierFrequency === ""
+      ? null
+      : Number(treatmentParameters.carrierFrequency),
+
+  beat_frequency:
+    treatmentParameters.beatFrequency === ""
+      ? null
+      : Number(treatmentParameters.beatFrequency),
+
+  intensity:
+    treatmentParameters.intensity === ""
+      ? null
+      : Number(treatmentParameters.intensity),
+
+  duration:
+    treatmentParameters.duration === ""
+      ? null
+      : Number(treatmentParameters.duration),
+
+  notes:
+    treatmentParameters.notes || "",
+
+  report_filename: null,
+
+  report_path: null,
+};
+
+const savedBackendSession =
+  await createSession(backendSession);
+
+console.log(
+  "Session saved to backend:",
+  savedBackendSession
+);
     const newSession = {
       id: `S${String(sessionHistory.length + 1).padStart(
         3,
